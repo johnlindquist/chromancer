@@ -1,0 +1,39 @@
+{
+  "name": "cdp-cli",
+  "version": "1.0.0",
+  "description": "CLI tool for Chrome DevTools Protocol automation",
+  "main": "dist/index.js",
+  "bin": {
+    "cdp-cli": "./bin/run.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "prepack": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["chrome", "devtools", "automation", "scraping"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@oclif/core": "^4.3.1",
+    "@oclif/plugin-help": "^6.2.28",
+    "@types/node": "^22.15.29",
+    "oclif": "^4.18.0",
+    "puppeteer-core": "^24.10.0",
+    "typescript": "^5.8.3"
+  },
+  "oclif": {
+    "bin": "cdp-cli",
+    "dirname": "cdp-cli",
+    "commands": "./dist/commands",
+    "plugins": [
+      "@oclif/plugin-help"
+    ]
+  },
+  "files": [
+    "/bin",
+    "/dist",
+    "/oclif.manifest.json"
+  ]
+}
