@@ -32,7 +32,7 @@ export default class Navigate extends BaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(Navigate)
     
-    await this.connectToChrome(flags.port, flags.host)
+    await this.connectToChrome(flags.port, flags.host, flags.launch)
     
     if (!this.page) {
       this.error('No page available')

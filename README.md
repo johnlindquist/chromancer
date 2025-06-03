@@ -95,8 +95,37 @@ node ./bin/run.js evaluate "document.querySelectorAll('.repo-list-item').length"
 
 ## Testing
 
-Run the test script:
+### Unit Tests
+
+Run unit tests to verify CLI structure:
 
 ```bash
-./test-cli.sh
+node test/unit-tests.js
+```
+
+### Integration Tests
+
+For full integration testing with Chrome:
+
+```bash
+# Option 1: Use local Chrome
+google-chrome --remote-debugging-port=9222 --headless
+node test/test-suite.js
+
+# Option 2: Use Docker Chrome
+docker run -d --name chrome-test -p 9222:9222 zenika/alpine-chrome \
+  --no-sandbox --remote-debugging-host=0.0.0.0 --remote-debugging-port=9222
+node test/test-suite.js
+docker stop chrome-test && docker rm chrome-test
+
+# Option 3: Auto-launch Chrome (if installed)
+node ./bin/run.js navigate https://example.com --launch
+```
+
+### Mock Server Test
+
+Test basic connectivity without Chrome:
+
+```bash
+node test/mock-chrome-test.js
 ```
