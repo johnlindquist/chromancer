@@ -1,7 +1,6 @@
 import { Command, Flags } from '@oclif/core'
 import puppeteer, { Browser, Page } from 'puppeteer-core'
 import { SessionManager } from './session.js'
-import fetch from 'node-fetch'
 
 export abstract class BaseCommand extends Command {
   static baseFlags = {

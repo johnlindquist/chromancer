@@ -1,6 +1,5 @@
 import { Flags } from '@oclif/core'
 import { Command } from '@oclif/core'
-import fetch from 'node-fetch'
 import { execSync } from 'child_process'
 import * as os from 'os'
 
@@ -131,9 +130,7 @@ export default class Sessions extends Command {
     
     try {
       // Try to get version info
-      const versionResponse = await fetch(`http://localhost:${port}/json/version`, {
-        timeout: 1000
-      } as any)
+      const versionResponse = await fetch(`http://localhost:${port}/json/version`)
       
       if (versionResponse.ok) {
         const versionData = await versionResponse.json() as any
