@@ -1,4 +1,4 @@
-# Chrome DevTools Protocol CLI
+# Chromancer
 
 A command-line interface for automating Chrome browser using the Chrome DevTools Protocol. Perfect for web scraping, automation, and testing.
 

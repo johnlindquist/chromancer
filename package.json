@@ -1,10 +1,10 @@
 {
-  "name": "cdp-cli",
+  "name": "chromancer",
   "version": "1.0.0",
-  "description": "CLI tool for Chrome DevTools Protocol automation",
+  "description": "Chromancer - Command-line mastery over Chrome through DevTools Protocol",
   "main": "dist/index.js",
   "bin": {
-    "cdp-cli": "./bin/run.js"
+    "chromancer": "./bin/run.js"
   },
   "scripts": {
     "build": "tsc",
@@ -24,8 +24,8 @@
     "typescript": "^5.8.3"
   },
   "oclif": {
-    "bin": "cdp-cli",
-    "dirname": "cdp-cli",
+    "bin": "chromancer",
+    "dirname": "chromancer",
     "commands": "./dist/commands",
     "plugins": [
       "@oclif/plugin-help"
