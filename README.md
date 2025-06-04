@@ -65,6 +65,13 @@ npm run build
 The easiest way to get started is using the `spawn` command:
 
 ```bash
+# Check version
+chromancer --version
+```
+
+Then spawn Chrome:
+
+```bash
 # Spawn Chrome and open a URL
 chromancer spawn https://example.com
 
