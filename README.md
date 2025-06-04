@@ -54,7 +54,7 @@ npx chromancer spawn https://example.com
 ### Development Setup
 
 ```bash
-git clone https://github.com/yourusername/chromancer.git
+git clone https://github.com/johnlindquist/chromancer.git
 cd chromancer
 npm install
 npm run build
@@ -292,4 +292,4 @@ chmod +x $(which chromancer)
 
 ## License
 
-MIT © [Your Name]
+MIT © John Lindquist

@@ -26,15 +26,15 @@
     "testing",
     "web-automation"
   ],
-  "author": "Your Name",
+  "author": "John Lindquist",
   "license": "MIT",
-  "homepage": "https://github.com/yourusername/chromancer#readme",
+  "homepage": "https://github.com/johnlindquist/chromancer#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/chromancer.git"
+    "url": "git+https://github.com/johnlindquist/chromancer.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/chromancer/issues"
+    "url": "https://github.com/johnlindquist/chromancer/issues"
   },
   "engines": {
     "node": ">=18.0.0"
