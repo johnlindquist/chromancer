@@ -40,6 +40,7 @@ runTest('Help lists all commands', () => {
   assert(output.includes('type'), 'type command not found');
   assert(output.includes('evaluate'), 'evaluate command not found');
   assert(output.includes('screenshot'), 'screenshot command not found');
+  assert(output.includes('spawn'), 'spawn command not found');
 });
 
 // Test 3: Command help works
@@ -76,7 +77,15 @@ runTest('Screenshot help works', () => {
   assert(output.includes('--full-page'), 'full-page flag not documented');
 });
 
-// Test 8: Launch flag is available
+// Test 8: Spawn help works
+runTest('Spawn help works', () => {
+  const output = execSync('node ./bin/run.js spawn --help', { encoding: 'utf8' });
+  assert(output.includes('URL to open'), 'url argument not documented');
+  assert(output.includes('--port'), 'port flag not documented');
+  assert(output.includes('--headless'), 'headless flag not documented');
+});
+
+// Test 9: Launch flag is available
 runTest('Launch flag available in all commands', () => {
   const commands = ['navigate', 'click', 'type', 'evaluate', 'screenshot'];
   commands.forEach(cmd => {
@@ -85,7 +94,7 @@ runTest('Launch flag available in all commands', () => {
   });
 });
 
-// Test 9: Error handling for missing arguments
+// Test 10: Error handling for missing arguments
 runTest('Missing arguments show error', () => {
   try {
     execSync('node ./bin/run.js navigate 2>&1', { encoding: 'utf8', stdio: 'pipe' });

@@ -4,6 +4,7 @@ A command-line interface for automating Chrome browser using the Chrome DevTools
 
 ## Features
 
+- Spawn Chrome instances with automatic port management
 - Navigate to URLs
 - Click elements using CSS selectors
 - Type text into input fields
@@ -17,19 +18,40 @@ npm install
 npm run build
 ```
 
-## Prerequisites
+## Quick Start
 
-Start Chrome with remote debugging enabled:
+The easiest way to get started is using the `spawn` command:
 
 ```bash
-# Headless mode
-google-chrome --remote-debugging-port=9222 --headless=new
+# Spawn Chrome and open a URL
+node ./bin/run.js spawn https://example.com
 
-# Or with GUI
-google-chrome --remote-debugging-port=9222
+# Spawn Chrome in headless mode
+node ./bin/run.js spawn https://example.com --headless
+
+# Spawn Chrome on a specific port
+node ./bin/run.js spawn https://example.com --port 9223
 ```
 
+The spawn command automatically:
+- Finds an available port (defaults to 9222, falls back to 9223-9232)
+- Launches Chrome with remote debugging enabled
+- Opens the specified URL (or about:blank if none provided)
+- Displays the DevTools connection URL
+
 ## Usage
+
+### Spawn Chrome
+
+```bash
+# Basic usage
+node ./bin/run.js spawn https://example.com
+
+# With options
+node ./bin/run.js spawn https://example.com --headless
+node ./bin/run.js spawn https://example.com --port 9223
+node ./bin/run.js spawn --user-data-dir /tmp/chrome-profile
+```
 
 ### Navigate to a URL
 
@@ -68,19 +90,17 @@ node ./bin/run.js screenshot fullpage.png --full-page
 
 ## Global Options
 
-All commands support these options:
+All commands (except spawn) support these options:
 
 - `-p, --port <number>` - Chrome debugging port (default: 9222)
 - `-h, --host <string>` - Chrome debugging host (default: localhost)
+- `-l, --launch` - Launch Chrome automatically if not running
 
 ## Example Workflow
 
 ```bash
-# Start Chrome
-google-chrome --remote-debugging-port=9222 --headless=new
-
-# Navigate to a website
-node ./bin/run.js navigate https://github.com
+# Spawn Chrome
+node ./bin/run.js spawn https://github.com
 
 # Take a screenshot
 node ./bin/run.js screenshot github-home.png
@@ -91,6 +111,18 @@ node ./bin/run.js click "button[type=submit]"
 
 # Count search results
 node ./bin/run.js evaluate "document.querySelectorAll('.repo-list-item').length"
+```
+
+### Alternative: Connect to existing Chrome
+
+If you prefer to manage Chrome manually:
+
+```bash
+# Start Chrome manually
+google-chrome --remote-debugging-port=9222
+
+# Use the CLI commands
+node ./bin/run.js navigate https://example.com
 ```
 
 ## Testing
@@ -108,8 +140,8 @@ node test/unit-tests.js
 For full integration testing with Chrome:
 
 ```bash
-# Option 1: Use local Chrome
-google-chrome --remote-debugging-port=9222 --headless
+# Option 1: Use spawn command
+node ./bin/run.js spawn --headless
 node test/test-suite.js
 
 # Option 2: Use Docker Chrome
@@ -118,7 +150,7 @@ docker run -d --name chrome-test -p 9222:9222 zenika/alpine-chrome \
 node test/test-suite.js
 docker stop chrome-test && docker rm chrome-test
 
-# Option 3: Auto-launch Chrome (if installed)
+# Option 3: Auto-launch Chrome with any command
 node ./bin/run.js navigate https://example.com --launch
 ```
 
