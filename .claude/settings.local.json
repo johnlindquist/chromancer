@@ -9,7 +9,9 @@
       "Bash(gh:*)",
       "Bash(git:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(curl:*)",
+      "Bash(./verify-all.sh:*)"
     ],
     "deny": []
   }
