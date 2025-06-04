@@ -41,6 +41,7 @@ runTest('Help lists all commands', () => {
   assert(output.includes('evaluate'), 'evaluate command not found');
   assert(output.includes('screenshot'), 'screenshot command not found');
   assert(output.includes('spawn'), 'spawn command not found');
+  assert(output.includes('stop'), 'stop command not found');
 });
 
 // Test 3: Command help works
@@ -85,7 +86,13 @@ runTest('Spawn help works', () => {
   assert(output.includes('--headless'), 'headless flag not documented');
 });
 
-// Test 9: Launch flag is available
+// Test 9: Stop help works
+runTest('Stop help works', () => {
+  const output = execSync('node ./bin/run.js stop --help', { encoding: 'utf8' });
+  assert(output.includes('Stop the active Chrome'), 'stop description not found');
+});
+
+// Test 10: Launch flag is available
 runTest('Launch flag available in all commands', () => {
   const commands = ['navigate', 'click', 'type', 'evaluate', 'screenshot'];
   commands.forEach(cmd => {
@@ -94,7 +101,7 @@ runTest('Launch flag available in all commands', () => {
   });
 });
 
-// Test 10: Error handling for missing arguments
+// Test 11: Error handling for missing arguments
 runTest('Missing arguments show error', () => {
   try {
     execSync('node ./bin/run.js navigate 2>&1', { encoding: 'utf8', stdio: 'pipe' });

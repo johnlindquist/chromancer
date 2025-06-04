@@ -38,6 +38,24 @@ The spawn command automatically:
 - Launches Chrome with remote debugging enabled
 - Opens the specified URL (or about:blank if none provided)
 - Displays the DevTools connection URL
+- **Creates an active session that subsequent commands will use automatically**
+
+## Session Management
+
+When you use `spawn`, it creates an active session. All subsequent commands will automatically connect to this Chrome instance without needing to specify the port:
+
+```bash
+# Start a session
+node ./bin/run.js spawn https://example.com
+
+# These commands automatically use the spawned Chrome
+node ./bin/run.js navigate https://github.com
+node ./bin/run.js screenshot page.png
+node ./bin/run.js evaluate "document.title"
+
+# Stop the Chrome instance
+node ./bin/run.js stop
+```
 
 ## Usage
 
@@ -51,6 +69,13 @@ node ./bin/run.js spawn https://example.com
 node ./bin/run.js spawn https://example.com --headless
 node ./bin/run.js spawn https://example.com --port 9223
 node ./bin/run.js spawn --user-data-dir /tmp/chrome-profile
+```
+
+### Stop Chrome
+
+```bash
+# Stop the active Chrome session
+node ./bin/run.js stop
 ```
 
 ### Navigate to a URL
@@ -90,19 +115,19 @@ node ./bin/run.js screenshot fullpage.png --full-page
 
 ## Global Options
 
-All commands (except spawn) support these options:
+All commands (except spawn and stop) support these options:
 
-- `-p, --port <number>` - Chrome debugging port (default: 9222)
+- `-p, --port <number>` - Chrome debugging port (uses active session by default)
 - `-h, --host <string>` - Chrome debugging host (default: localhost)
 - `-l, --launch` - Launch Chrome automatically if not running
 
 ## Example Workflow
 
 ```bash
-# Spawn Chrome
+# Spawn Chrome with session
 node ./bin/run.js spawn https://github.com
 
-# Take a screenshot
+# Take a screenshot (automatically uses the spawned Chrome)
 node ./bin/run.js screenshot github-home.png
 
 # Search for something
@@ -111,6 +136,9 @@ node ./bin/run.js click "button[type=submit]"
 
 # Count search results
 node ./bin/run.js evaluate "document.querySelectorAll('.repo-list-item').length"
+
+# Stop Chrome when done
+node ./bin/run.js stop
 ```
 
 ### Alternative: Connect to existing Chrome

@@ -1,12 +1,13 @@
 import { Command, Flags } from '@oclif/core'
 import puppeteer, { Browser, Page } from 'puppeteer-core'
+import { SessionManager } from './session.js'
 
 export abstract class BaseCommand extends Command {
   static baseFlags = {
     port: Flags.integer({
       char: 'p',
-      description: 'Chrome debugging port',
-      default: 9222,
+      description: 'Chrome debugging port (uses active session if available)',
+      required: false,
     }),
     host: Flags.string({
       char: 'h',
@@ -24,14 +25,23 @@ export abstract class BaseCommand extends Command {
   protected page?: Page
   private isLaunched = false
 
-  async connectToChrome(port: number, host: string, launch: boolean = false): Promise<void> {
+  async connectToChrome(port: number | undefined, host: string, launch: boolean = false): Promise<void> {
+    // Check for active session first
+    const session = await SessionManager.getValidSession()
+    if (session && !port) {
+      port = session.port
+      this.log(`Using active session on port ${port}`)
+    } else if (!port) {
+      port = 9222 // Default port
+    }
+    
     try {
       // First try to connect to existing Chrome instance
       this.browser = await puppeteer.connect({
         browserURL: `http://${host}:${port}`,
         defaultViewport: null,
       });
-      this.log('Connected to existing Chrome instance');
+      this.log('Connected to Chrome');
     } catch (connectError) {
       if (launch) {
         // Try to launch Chrome

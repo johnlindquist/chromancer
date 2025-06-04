@@ -3,6 +3,7 @@ import { spawn } from 'child_process'
 import * as net from 'net'
 import * as fs from 'fs'
 import { execSync } from 'child_process'
+import { SessionManager } from '../session.js'
 
 export default class Spawn extends Command {
   static description = 'Spawn a Chrome browser instance with remote debugging'
@@ -101,6 +102,14 @@ export default class Spawn extends Command {
   public async run(): Promise<void> {
     const { args, flags } = await this.parse(Spawn)
     
+    // Check if there's already an active session
+    const existingSession = await SessionManager.getValidSession()
+    if (existingSession) {
+      this.log(`Chrome is already running on port ${existingSession.port}`)
+      this.log('Use "chromancer stop" to stop the current session first')
+      return
+    }
+    
     // Find an available port
     let port = flags.port
     if (!await this.isPortAvailable(port)) {
@@ -140,7 +149,7 @@ export default class Spawn extends Command {
       detached: true,
       stdio: 'ignore',
     })
-
+    
     chromeProcess.unref()
 
     // Wait a moment for Chrome to start
@@ -151,6 +160,15 @@ export default class Spawn extends Command {
       const response = await fetch(`http://localhost:${port}/json/version`)
       const version = await response.json() as { Browser: string }
       
+      // Save session info
+      SessionManager.saveSession({
+        port,
+        pid: chromeProcess.pid!,
+        startTime: Date.now(),
+        url: args.url,
+      })
+      SessionManager.setActiveProcess(chromeProcess)
+      
       this.log(`✅ Chrome spawned successfully on port ${port}`)
       this.log(`Browser: ${version.Browser}`)
       this.log(`DevTools URL: http://localhost:${port}`)
@@ -158,7 +176,10 @@ export default class Spawn extends Command {
       if (args.url && args.url !== 'about:blank') {
         this.log(`Opened: ${args.url}`)
       }
+      
+      this.log('\n📌 This Chrome instance is now the active session for all commands')
     } catch (error) {
+      chromeProcess.kill()
       this.warn('Chrome process started but DevTools connection could not be verified')
       this.log(`Try connecting manually to http://localhost:${port}`)
     }
