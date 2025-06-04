@@ -1,60 +1,64 @@
 # GitHub Actions Workflows
 
-This project uses GitHub Actions for automated releases and npm publishing.
+This project uses GitHub Actions for automated releases and npm publishing based on conventional commits.
 
-## Workflows
+## Automated Release and Publish
 
-### 1. Create Release (`release.yml`)
+### Release and Publish (`release.yml`)
 
-**Trigger**: Manual workflow dispatch from GitHub Actions tab
+**Trigger**: Every push to the `main` branch
 
-**Purpose**: Creates a new version tag and GitHub release without creating any commits
-
-**How to use**:
-1. Go to Actions tab in GitHub
-2. Select "Create Release" workflow
-3. Click "Run workflow"
-4. Choose version type: patch, minor, or major
-5. The workflow will:
-   - Calculate the new version
-   - Create a git tag
-   - Create a GitHub release
-
-### 2. Publish to npm (`publish.yml`)
-
-**Trigger**: Automatically when a new version tag is pushed (v*.*.*)
-
-**Purpose**: Publishes the package to npm when a release is created
+**Purpose**: Automatically determines version, creates release, and publishes to npm
 
 **What it does**:
-1. Checks out the code at the tagged version
-2. Updates package.json with the version from the tag
-3. Builds the project
-4. Runs tests
+1. Analyzes commit messages to determine version bump
+2. Updates package.json version (in memory only, no commit)
+3. Creates a git tag
+4. Creates a GitHub release with release notes
 5. Publishes to npm
+
+## Commit Message Convention
+
+This project follows [Conventional Commits](https://www.conventionalcommits.org/):
+
+- `feat:` New feature → Minor version bump (1.0.0 → 1.1.0)
+- `fix:` Bug fix → Patch version bump (1.0.0 → 1.0.1)
+- `perf:` Performance improvement → Patch version bump
+- `BREAKING CHANGE:` or `feat!:` → Major version bump (1.0.0 → 2.0.0)
+- `docs:`, `style:`, `refactor:`, `test:`, `chore:` → No release
+
+### Examples:
+```bash
+# Minor release (1.0.0 → 1.1.0)
+git commit -m "feat: add new command for listing sessions"
+
+# Patch release (1.0.0 → 1.0.1)
+git commit -m "fix: correct port detection on Windows"
+
+# Major release (1.0.0 → 2.0.0)
+git commit -m "feat!: change CLI argument structure"
+# or
+git commit -m "feat: new API
+
+BREAKING CHANGE: removed support for Node 16"
+
+# No release
+git commit -m "docs: update README"
+git commit -m "chore: update dependencies"
+```
 
 ## Setup Required
 
-Before using these workflows, you need to:
+✅ **NPM_TOKEN** is already configured in repository secrets
 
-1. **Set up NPM_TOKEN secret**:
-   - Go to https://www.npmjs.com/settings/[your-username]/tokens
-   - Create a new "Automation" token
-   - In GitHub repo settings, go to Secrets and variables > Actions
-   - Add a new secret named `NPM_TOKEN` with the token value
+## How It Works
 
-## Release Process
+1. Push commits to main with conventional commit messages
+2. GitHub Actions automatically:
+   - Determines the next version based on commits
+   - Creates a tag (e.g., v1.0.1)
+   - Generates release notes from commit messages
+   - Creates a GitHub release
+   - Publishes to npm
 
-1. Make your changes and push to main
-2. Go to Actions > Create Release > Run workflow
-3. Select version type (patch/minor/major)
-4. The release workflow creates a tag
-5. The publish workflow automatically runs and publishes to npm
-
-## Version Strategy
-
-- **patch**: Bug fixes and minor changes (1.0.0 → 1.0.1)
-- **minor**: New features, backwards compatible (1.0.0 → 1.1.0)
-- **major**: Breaking changes (1.0.0 → 2.0.0)
-
-No commits are created by the workflows - only tags and releases.
+**No commits are created** - the version is only updated in the published npm package, not in the repository.

@@ -16,7 +16,10 @@
       "Bash(npm run build:*)",
       "Bash(npm test)",
       "Bash(npx:*)",
-      "Bash(npm pack:*)"
+      "Bash(npm pack:*)",
+      "Bash(mkdir:*)",
+      "Bash(rm:*)",
+      "Bash(npm:*)"
     ],
     "deny": []
   }
