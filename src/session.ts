@@ -52,7 +52,21 @@ export class SessionManager {
   static async isSessionValid(session: ChromeSession): Promise<boolean> {
     try {
       // Check if the process is still running
-      process.kill(session.pid, 0)
+      if (process.platform === 'win32') {
+        // On Windows, use tasklist to check if process exists
+        const { execSync } = require('child_process')
+        try {
+          const output = execSync(`tasklist /FI "PID eq ${session.pid}"`, { encoding: 'utf8' })
+          if (!output.includes(session.pid.toString())) {
+            return false
+          }
+        } catch {
+          return false
+        }
+      } else {
+        // On Unix-like systems, use kill -0
+        process.kill(session.pid, 0)
+      }
       
       // Also check if Chrome is responding
       const response = await fetch(`http://localhost:${session.port}/json/version`)

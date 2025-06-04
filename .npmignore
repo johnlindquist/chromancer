@@ -1,0 +1,53 @@
+# Source files
+src/
+*.ts
+!dist/**/*.d.ts
+
+# Config files
+tsconfig.json
+.eslintrc
+.prettierrc
+
+# Test files
+test/
+*.test.js
+*.spec.js
+
+# Development files
+.vscode/
+.idea/
+*.log
+.DS_Store
+
+# Git files
+.git/
+.gitignore
+
+# Documentation source
+docs/
+
+# Scripts
+*.sh
+docker-chrome-setup.sh
+verify-all.sh
+test-cli.sh
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Node modules (already excluded by npm)
+node_modules/
+
+# Build artifacts not needed
+*.tsbuildinfo
+
+# Local env files
+.env
+.env.local
+.env.*.local
+
+# Claude files
+.claude/
+CLAUDE.md

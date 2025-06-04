@@ -12,7 +12,11 @@
       "Bash(git commit:*)",
       "Bash(curl:*)",
       "Bash(./verify-all.sh:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm test)",
+      "Bash(npx:*)",
+      "Bash(npm pack:*)"
     ],
     "deny": []
   }

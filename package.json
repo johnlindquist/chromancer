@@ -1,7 +1,7 @@
 {
   "name": "chromancer",
   "version": "1.0.0",
-  "description": "Chromancer - Command-line mastery over Chrome through DevTools Protocol",
+  "description": "Command-line interface for Chrome automation using DevTools Protocol",
   "main": "dist/index.js",
   "bin": {
     "chromancer": "./bin/run.js"
@@ -9,12 +9,36 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
-    "prepack": "npm run build",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "prepack": "npm run clean && npm run build",
+    "test": "node test/unit-tests.js",
+    "prepublishOnly": "npm test && npm run build"
   },
-  "keywords": ["chrome", "devtools", "automation", "scraping"],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "chrome",
+    "chromium",
+    "devtools",
+    "cdp",
+    "automation",
+    "scraping",
+    "browser",
+    "cli",
+    "puppeteer",
+    "testing",
+    "web-automation"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "homepage": "https://github.com/yourusername/chromancer#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/chromancer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/chromancer/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "@oclif/core": "^4.3.1",
     "@oclif/plugin-help": "^6.2.28",

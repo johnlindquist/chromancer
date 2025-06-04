@@ -1,19 +1,61 @@
 # Chromancer
 
+[![npm version](https://badge.fury.io/js/chromancer.svg)](https://www.npmjs.com/package/chromancer)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js Version](https://img.shields.io/node/v/chromancer.svg)](https://nodejs.org)
+
 A command-line interface for automating Chrome browser using the Chrome DevTools Protocol. Perfect for web scraping, automation, and testing.
 
 ## Features
 
-- Spawn Chrome instances with automatic port management
-- Navigate to URLs
-- Click elements using CSS selectors
-- Type text into input fields
-- Execute JavaScript in page context
-- Take screenshots (full page or viewport)
+- 🚀 Spawn Chrome instances with automatic port management
+- 🔄 Session management - all commands work with your active Chrome instance
+- 🌐 Navigate to URLs with various wait conditions
+- 🖱️ Click elements using CSS selectors
+- ⌨️ Type text into input fields
+- 📜 Execute JavaScript in page context
+- 📸 Take screenshots (full page or viewport)
+- 🛑 Gracefully stop Chrome instances
+
+## Requirements
+
+- Node.js 18.0.0 or higher
+- Chrome or Chromium browser installed
+- **Windows Users**: Chrome must be installed in the default location or available in PATH
 
 ## Installation
 
+### Global Installation (Recommended)
+
 ```bash
+npm install -g chromancer
+```
+
+After installation, you can use `chromancer` from anywhere:
+
+```bash
+chromancer spawn https://example.com
+chromancer screenshot page.png
+chromancer stop
+```
+
+### Local Installation
+
+```bash
+npm install chromancer
+```
+
+Then use with npx:
+
+```bash
+npx chromancer spawn https://example.com
+```
+
+### Development Setup
+
+```bash
+git clone https://github.com/yourusername/chromancer.git
+cd chromancer
 npm install
 npm run build
 ```
@@ -24,13 +66,13 @@ The easiest way to get started is using the `spawn` command:
 
 ```bash
 # Spawn Chrome and open a URL
-node ./bin/run.js spawn https://example.com
+chromancer spawn https://example.com
 
 # Spawn Chrome in headless mode
-node ./bin/run.js spawn https://example.com --headless
+chromancer spawn https://example.com --headless
 
 # Spawn Chrome on a specific port
-node ./bin/run.js spawn https://example.com --port 9223
+chromancer spawn https://example.com --port 9223
 ```
 
 The spawn command automatically:
@@ -46,15 +88,15 @@ When you use `spawn`, it creates an active session. All subsequent commands will
 
 ```bash
 # Start a session
-node ./bin/run.js spawn https://example.com
+chromancer spawn https://example.com
 
 # These commands automatically use the spawned Chrome
-node ./bin/run.js navigate https://github.com
-node ./bin/run.js screenshot page.png
-node ./bin/run.js evaluate "document.title"
+chromancer navigate https://github.com
+chromancer screenshot page.png
+chromancer evaluate "document.title"
 
 # Stop the Chrome instance
-node ./bin/run.js stop
+chromancer stop
 ```
 
 ## Usage
@@ -63,54 +105,54 @@ node ./bin/run.js stop
 
 ```bash
 # Basic usage
-node ./bin/run.js spawn https://example.com
+chromancer spawn https://example.com
 
 # With options
-node ./bin/run.js spawn https://example.com --headless
-node ./bin/run.js spawn https://example.com --port 9223
-node ./bin/run.js spawn --user-data-dir /tmp/chrome-profile
+chromancer spawn https://example.com --headless
+chromancer spawn https://example.com --port 9223
+chromancer spawn --user-data-dir /tmp/chrome-profile
 ```
 
 ### Stop Chrome
 
 ```bash
 # Stop the active Chrome session
-node ./bin/run.js stop
+chromancer stop
 ```
 
 ### Navigate to a URL
 
 ```bash
-node ./bin/run.js navigate https://example.com
-node ./bin/run.js navigate https://example.com --wait-until networkidle0
+chromancer navigate https://example.com
+chromancer navigate https://example.com --wait-until networkidle0
 ```
 
 ### Click an element
 
 ```bash
-node ./bin/run.js click "button.submit"
-node ./bin/run.js click "#login-button" --wait-for-selector
+chromancer click "button.submit"
+chromancer click "#login-button" --wait-for-selector
 ```
 
 ### Type text
 
 ```bash
-node ./bin/run.js type "input[name=email]" "user@example.com"
-node ./bin/run.js type "#search-box" "search query" --clear-first
+chromancer type "input[name=email]" "user@example.com"
+chromancer type "#search-box" "search query" --clear-first
 ```
 
 ### Execute JavaScript
 
 ```bash
-node ./bin/run.js evaluate "document.title"
-node ./bin/run.js evaluate "document.querySelectorAll('a').length"
+chromancer evaluate "document.title"
+chromancer evaluate "document.querySelectorAll('a').length"
 ```
 
 ### Take screenshot
 
 ```bash
-node ./bin/run.js screenshot screenshot.png
-node ./bin/run.js screenshot fullpage.png --full-page
+chromancer screenshot screenshot.png
+chromancer screenshot fullpage.png --full-page
 ```
 
 ## Global Options
@@ -125,20 +167,20 @@ All commands (except spawn and stop) support these options:
 
 ```bash
 # Spawn Chrome with session
-node ./bin/run.js spawn https://github.com
+chromancer spawn https://github.com
 
 # Take a screenshot (automatically uses the spawned Chrome)
-node ./bin/run.js screenshot github-home.png
+chromancer screenshot github-home.png
 
 # Search for something
-node ./bin/run.js type "input[name=q]" "oclif" --clear-first
-node ./bin/run.js click "button[type=submit]"
+chromancer type "input[name=q]" "oclif" --clear-first
+chromancer click "button[type=submit]"
 
 # Count search results
-node ./bin/run.js evaluate "document.querySelectorAll('.repo-list-item').length"
+chromancer evaluate "document.querySelectorAll('.repo-list-item').length"
 
 # Stop Chrome when done
-node ./bin/run.js stop
+chromancer stop
 ```
 
 ### Alternative: Connect to existing Chrome
@@ -147,11 +189,31 @@ If you prefer to manage Chrome manually:
 
 ```bash
 # Start Chrome manually
+# Linux/Mac:
 google-chrome --remote-debugging-port=9222
 
+# Windows:
+chrome.exe --remote-debugging-port=9222
+
 # Use the CLI commands
-node ./bin/run.js navigate https://example.com
+chromancer navigate https://example.com --port 9222
 ```
+
+### Platform-Specific Notes
+
+#### Windows
+- Chrome is automatically detected in common installation paths
+- The CLI will check the Windows Registry for Chrome location
+- Process management uses Windows-specific commands (taskkill)
+- Use `.bat` scripts instead of `.sh` scripts for testing
+
+#### macOS
+- Supports Chrome, Chromium, and Chrome Canary
+- Looks for applications in /Applications folder
+
+#### Linux
+- Checks common package manager installation paths
+- Supports snap packages (/snap/bin/chromium)
 
 ## Testing
 
@@ -169,7 +231,7 @@ For full integration testing with Chrome:
 
 ```bash
 # Option 1: Use spawn command
-node ./bin/run.js spawn --headless
+chromancer spawn --headless
 node test/test-suite.js
 
 # Option 2: Use Docker Chrome
@@ -179,7 +241,7 @@ node test/test-suite.js
 docker stop chrome-test && docker rm chrome-test
 
 # Option 3: Auto-launch Chrome with any command
-node ./bin/run.js navigate https://example.com --launch
+chromancer navigate https://example.com --launch
 ```
 
 ### Mock Server Test
@@ -189,3 +251,45 @@ Test basic connectivity without Chrome:
 ```bash
 node test/mock-chrome-test.js
 ```
+
+## Troubleshooting
+
+### Chrome not found
+
+If Chromancer can't find Chrome, you can:
+
+1. Make sure Chrome or Chromium is installed
+2. Add Chrome to your PATH
+3. Use the spawn command which will auto-detect Chrome location
+
+### Port already in use
+
+If the default port (9222) is in use:
+
+```bash
+# Use a different port
+chromancer spawn --port 9223
+
+# Or stop any existing session
+chromancer stop
+```
+
+### Permission denied
+
+On Linux/macOS, you might need to make the binary executable:
+
+```bash
+chmod +x $(which chromancer)
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+MIT © [Your Name]

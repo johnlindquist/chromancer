@@ -73,32 +73,75 @@ export abstract class BaseCommand extends Command {
   }
 
   private findChromeExecutable(): string | undefined {
-    // Common Chrome/Chromium executable paths
-    const paths = [
-      '/usr/bin/chromium',
-      '/usr/bin/chromium-browser',
-      '/usr/bin/google-chrome',
-      '/usr/bin/google-chrome-stable',
-      '/usr/local/bin/chrome',
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-    ];
-
     const { execSync } = require('child_process');
+    const fs = require('fs');
+    const platform = process.platform;
     
-    // Try to find Chrome via 'which' command
-    try {
-      const chromePath = execSync('which chromium || which chromium-browser || which google-chrome || which chrome', { encoding: 'utf8' }).trim();
-      if (chromePath) {
-        return chromePath.split('\n')[0]; // Return first found
+    // Common Chrome/Chromium executable paths by platform
+    const paths: string[] = [];
+    
+    if (platform === 'win32') {
+      // Windows paths
+      paths.push(
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files\\Chromium\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Chromium\\Application\\chrome.exe'
+      );
+      
+      // Try to find Chrome via where command on Windows
+      try {
+        const chromePath = execSync('where chrome.exe', { encoding: 'utf8' }).trim();
+        if (chromePath) {
+          return chromePath.split('\n')[0];
+        }
+      } catch {
+        // Try another method
       }
-    } catch {
-      // Continue to check predefined paths
+      
+      // Try to find Chrome via registry
+      try {
+        const regPath = execSync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe" /v Path', { encoding: 'utf8' });
+        const match = regPath.match(/REG_SZ\s+(.+)/i);
+        if (match && match[1]) {
+          const chromePath = match[1].trim() + '\\chrome.exe';
+          if (fs.existsSync(chromePath)) {
+            return chromePath;
+          }
+        }
+      } catch {
+        // Registry query failed, continue
+      }
+    } else if (platform === 'darwin') {
+      // macOS paths
+      paths.push(
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/Applications/Chromium.app/Contents/MacOS/Chromium',
+        '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary'
+      );
+    } else {
+      // Linux paths
+      paths.push(
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/google-chrome',
+        '/usr/bin/google-chrome-stable',
+        '/usr/local/bin/chrome',
+        '/snap/bin/chromium'
+      );
+      
+      // Try to find Chrome via 'which' command on Unix-like systems
+      try {
+        const chromePath = execSync('which chromium || which chromium-browser || which google-chrome || which chrome', { encoding: 'utf8' }).trim();
+        if (chromePath) {
+          return chromePath.split('\n')[0]; // Return first found
+        }
+      } catch {
+        // Continue to check predefined paths
+      }
     }
 
     // Check predefined paths
-    const fs = require('fs');
     for (const path of paths) {
       if (fs.existsSync(path)) {
         return path;
