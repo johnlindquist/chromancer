@@ -11,7 +11,7 @@
     "clean": "rm -rf dist",
     "prepack": "npm run clean && npm run build",
     "test": "node test/unit-tests.js",
-    "prepublishOnly": "npm run clean && npm test && npm run build"
+    "prepublishOnly": "npm run clean && npm run build && npm test"
   },
   "keywords": [
     "chrome",
