@@ -12,6 +12,7 @@ export default class Spawn extends Command {
     '<%= config.bin %> <%= command.id %> https://example.com',
     '<%= config.bin %> <%= command.id %> https://example.com --port 9223',
     '<%= config.bin %> <%= command.id %> https://example.com --headless',
+    '<%= config.bin %> <%= command.id %> --headless  # Opens about:blank in headless mode',
   ]
 
   static flags = {
