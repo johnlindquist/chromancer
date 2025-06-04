@@ -1,5 +1,7 @@
 import { Args, Flags } from '@oclif/core'
 import { BaseCommand } from '../base'
+import * as inquirer from 'inquirer'
+import * as clipboardy from 'clipboardy'
 
 export default class Select extends BaseCommand {
   static description = 'Find and inspect elements by CSS selector'
@@ -10,6 +12,7 @@ export default class Select extends BaseCommand {
     '<%= config.bin %> <%= command.id %> ".my-class" --port 9223',
     '<%= config.bin %> <%= command.id %> "#my-id" --launch',
     '<%= config.bin %> <%= command.id %> "input[type=text]" --attributes',
+    '<%= config.bin %> <%= command.id %> button --interactive',
   ]
 
   static flags = {
@@ -23,6 +26,11 @@ export default class Select extends BaseCommand {
       char: 'l',
       description: 'Limit number of results',
       default: 50,
+    }),
+    interactive: Flags.boolean({
+      char: 'i',
+      description: 'Interactively select an element and copy its selector to clipboard',
+      default: false,
     }),
   }
 
@@ -171,36 +179,68 @@ export default class Select extends BaseCommand {
         this.log(`Showing first ${flags.limit} results (use --limit to change)`)
       }
       
-      this.log('---')
-      
-      for (const el of elements.results) {
-        this.log(`[${el.index}] <${el.tagName}> ${el.visible ? '✓ visible' : '✗ hidden'}`)
-        this.log(`  Selector: ${el.selector}`)
+      if (flags.interactive) {
+        // Interactive mode - show selection menu
+        const choices = elements.results.map((el: any) => {
+          const visibilityIcon = el.visible ? '✓' : '✗'
+          const text = el.textContent ? ` - "${el.textContent.substring(0, 50)}${el.textContent.length > 50 ? '...' : ''}"` : ''
+          return {
+            name: `[${el.index}] <${el.tagName}> ${visibilityIcon} ${el.selector}${text}`,
+            value: el.selector,
+            short: el.selector,
+          }
+        })
         
-        if (el.id) {
-          this.log(`  ID: ${el.id}`)
+        const { selectedSelector } = await inquirer.prompt([
+          {
+            type: 'list',
+            name: 'selectedSelector',
+            message: 'Select an element to copy its selector:',
+            choices,
+            pageSize: 15,
+          },
+        ])
+        
+        try {
+          await clipboardy.write(selectedSelector)
+          this.log(`\n✓ Copied selector to clipboard: ${selectedSelector}`)
+        } catch (error) {
+          this.log(`\n✗ Failed to copy to clipboard: ${selectedSelector}`)
+          this.log('  You can manually copy the selector above')
         }
+      } else {
+        // Regular output mode
+        this.log('---')
         
-        if (el.classes && el.classes.length > 0) {
-          this.log(`  Classes: ${el.classes.join(', ')}`)
-        }
-        
-        if (el.textContent) {
-          this.log(`  Text: "${el.textContent}"`)
-        }
-        
-        this.log(`  Position: ${el.position.left}x${el.position.top} (${el.position.width}x${el.position.height})`)
-        
-        if (flags.attributes && el.attributes && Object.keys(el.attributes).length > 0) {
-          this.log('  Attributes:')
-          for (const [key, value] of Object.entries(el.attributes)) {
-            if (key !== 'id' && key !== 'class') {
-              this.log(`    ${key}: "${value}"`)
+        for (const el of elements.results) {
+          this.log(`[${el.index}] <${el.tagName}> ${el.visible ? '✓ visible' : '✗ hidden'}`)
+          this.log(`  Selector: ${el.selector}`)
+          
+          if (el.id) {
+            this.log(`  ID: ${el.id}`)
+          }
+          
+          if (el.classes && el.classes.length > 0) {
+            this.log(`  Classes: ${el.classes.join(', ')}`)
+          }
+          
+          if (el.textContent) {
+            this.log(`  Text: "${el.textContent}"`)
+          }
+          
+          this.log(`  Position: ${el.position.left}x${el.position.top} (${el.position.width}x${el.position.height})`)
+          
+          if (flags.attributes && el.attributes && Object.keys(el.attributes).length > 0) {
+            this.log('  Attributes:')
+            for (const [key, value] of Object.entries(el.attributes)) {
+              if (key !== 'id' && key !== 'class') {
+                this.log(`    ${key}: "${value}"`)
+              }
             }
           }
+          
+          this.log('')
         }
-        
-        this.log('')
       }
     } catch (error: any) {
       this.error(`Failed to select elements: ${error.message}`)

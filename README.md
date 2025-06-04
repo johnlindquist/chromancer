@@ -155,6 +155,7 @@ chromancer type "#search-box" "search query" --clear-first
 chromancer select "button"
 chromancer select "a[href]" --attributes
 chromancer select ".my-class" --limit 10
+chromancer select "button" --interactive
 ```
 
 The select command finds elements matching a CSS selector and provides:
@@ -162,6 +163,7 @@ The select command finds elements matching a CSS selector and provides:
 - Element visibility status
 - Text content, position, and dimensions
 - HTML attributes (with --attributes flag)
+- Interactive mode (with --interactive flag) to select an element and copy its selector to clipboard
 
 ### Execute JavaScript
 
