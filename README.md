@@ -13,6 +13,7 @@ A command-line interface for automating Chrome browser using the Chrome DevTools
 - 🌐 Navigate to URLs with various wait conditions
 - 🖱️ Click elements using CSS selectors
 - ⌨️ Type text into input fields
+- 🔍 Find and inspect elements with detailed information
 - 📜 Execute JavaScript in page context
 - 📸 Take screenshots (full page or viewport)
 - 🛑 Gracefully stop Chrome instances
@@ -146,6 +147,14 @@ chromancer click "#login-button" --wait-for-selector
 ```bash
 chromancer type "input[name=email]" "user@example.com"
 chromancer type "#search-box" "search query" --clear-first
+```
+
+### Select elements
+
+```bash
+chromancer select "button"
+chromancer select "a[href]" --attributes
+chromancer select ".my-class" --limit 10
 ```
 
 ### Execute JavaScript
