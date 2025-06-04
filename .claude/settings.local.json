@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit",
+      "Bash(open:*)",
+      "Bash(pnpm run:*)",
+      "Bash(node:*)",
+      "Bash(gh:*)",
+      "Bash(git:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": []
+  }
+}
