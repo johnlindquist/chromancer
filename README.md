@@ -157,6 +157,12 @@ chromancer select "a[href]" --attributes
 chromancer select ".my-class" --limit 10
 ```
 
+The select command finds elements matching a CSS selector and provides:
+- A unique selector for each element that can be used with click/type commands
+- Element visibility status
+- Text content, position, and dimensions
+- HTML attributes (with --attributes flag)
+
 ### Execute JavaScript
 
 ```bash
@@ -187,6 +193,9 @@ chromancer spawn https://github.com
 
 # Take a screenshot (automatically uses the spawned Chrome)
 chromancer screenshot github-home.png
+
+# Find search elements
+chromancer select "input"
 
 # Search for something
 chromancer type "input[name=q]" "oclif" --clear-first

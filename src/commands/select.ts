@@ -52,9 +52,79 @@ export default class Select extends BaseCommand {
             const el = matches[i]
             const rect = el.getBoundingClientRect()
             
+            // Generate best selector for element
+            function getBestSelector(element) {
+              // Priority 1: ID
+              if (element.id) {
+                return '#' + element.id
+              }
+              
+              // Priority 2: Unique class combination (skip classes with special chars)
+              if (element.className) {
+                const classes = element.className.split(' ').filter(c => c.trim())
+                // Only use classes that are valid CSS identifiers
+                const validClasses = classes.filter(c => /^[a-zA-Z_-][a-zA-Z0-9_-]*$/.test(c))
+                
+                if (validClasses.length > 0) {
+                  // Try first class alone
+                  const firstClassSelector = '.' + validClasses[0]
+                  if (document.querySelectorAll(firstClassSelector).length === 1) {
+                    return firstClassSelector
+                  }
+                  
+                  // Try combination of first few valid classes
+                  for (let i = 2; i <= Math.min(validClasses.length, 3); i++) {
+                    const classSelector = '.' + validClasses.slice(0, i).join('.')
+                    try {
+                      if (document.querySelectorAll(classSelector).length === 1) {
+                        return classSelector
+                      }
+                    } catch (e) {
+                      // Invalid selector, skip
+                    }
+                  }
+                }
+              }
+              
+              // Priority 3: Unique attribute
+              const uniqueAttrs = ['name', 'type', 'placeholder', 'aria-label', 'data-testid']
+              for (const attr of uniqueAttrs) {
+                if (element.hasAttribute(attr)) {
+                  const value = element.getAttribute(attr)
+                  const selector = element.tagName.toLowerCase() + '[' + attr + '="' + value + '"]'
+                  if (document.querySelectorAll(selector).length === 1) {
+                    return selector
+                  }
+                }
+              }
+              
+              // Priority 4: nth-of-type with parent context
+              const parent = element.parentElement
+              const siblings = parent ? Array.from(parent.children).filter(child => 
+                child.tagName === element.tagName
+              ) : []
+              const index = siblings.indexOf(element) + 1
+              
+              if (parent && parent.id) {
+                return '#' + parent.id + ' > ' + element.tagName.toLowerCase() + ':nth-of-type(' + index + ')'
+              }
+              
+              if (parent && parent.className) {
+                const parentClasses = parent.className.split(' ').filter(c => c.trim())
+                const validParentClasses = parentClasses.filter(c => /^[a-zA-Z_-][a-zA-Z0-9_-]*$/.test(c))
+                if (validParentClasses.length > 0) {
+                  return '.' + validParentClasses[0] + ' > ' + element.tagName.toLowerCase() + ':nth-of-type(' + index + ')'
+                }
+              }
+              
+              // Fallback: tag with index
+              return element.tagName.toLowerCase() + ':nth-of-type(' + index + ')'
+            }
+            
             const elementInfo = {
               index: i,
               tagName: el.tagName.toLowerCase(),
+              selector: getBestSelector(el),
               textContent: el.textContent?.trim().substring(0, 100) || '',
               visible: rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.left >= 0,
               position: {
@@ -105,6 +175,7 @@ export default class Select extends BaseCommand {
       
       for (const el of elements.results) {
         this.log(`[${el.index}] <${el.tagName}> ${el.visible ? '✓ visible' : '✗ hidden'}`)
+        this.log(`  Selector: ${el.selector}`)
         
         if (el.id) {
           this.log(`  ID: ${el.id}`)
