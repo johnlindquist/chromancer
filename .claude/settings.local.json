@@ -19,7 +19,19 @@
       "Bash(npm pack:*)",
       "Bash(mkdir:*)",
       "Bash(rm:*)",
-      "Bash(npm:*)"
+      "Bash(npm:*)",
+      "Bash(chromancer:*)",
+      "Bash(/Users/johnlindquist/Library/pnpm/nodejs/22.15.1/lib/node_modules/chromancer/bin/run.js --version)",
+      "Bash(/Users/johnlindquist/Library/pnpm/nodejs/22.15.1/lib/node_modules/chromancer/bin/run.js --help)",
+      "Bash(/Users/johnlindquist/Library/pnpm/nodejs/22.15.1/lib/node_modules/chromancer/bin/run.js spawn)",
+      "Bash(/Users/johnlindquist/Library/pnpm/nodejs/22.15.1/lib/node_modules/chromancer/bin/run.js navigate https://www.google.com)",
+      "Bash(/Users/johnlindquist/Library/pnpm/nodejs/22.15.1/lib/node_modules/chromancer/bin/run.js type 'textarea[name=\"q\"]' \"hello world\")",
+      "Bash(/Users/johnlindquist/Library/pnpm/nodejs/22.15.1/lib/node_modules/chromancer/bin/run.js click 'input[name=\"btnK\"]')",
+      "Bash(/Users/johnlindquist/Library/pnpm/nodejs/22.15.1/lib/node_modules/chromancer/bin/run.js evaluate \"Array.from(document.querySelectorAll('h3')).slice(0, 5).map(h => h.textContent).filter(Boolean)\")",
+      "Bash(/Users/johnlindquist/Library/pnpm/nodejs/22.15.1/lib/node_modules/chromancer/bin/run.js evaluate \"window.location.href\")",
+      "Bash(/Users/johnlindquist/Library/pnpm/nodejs/22.15.1/lib/node_modules/chromancer/bin/run.js navigate \"https://www.google.com/search?q=hello+world\")",
+      "Bash(/Users/johnlindquist/Library/pnpm/nodejs/22.15.1/lib/node_modules/chromancer/bin/run.js evaluate \"Array.from(document.querySelectorAll('h3')).slice(0, 5).map(h => ({title: h.textContent, link: h.closest('a')?.href})).filter(item => item.title)\")",
+      "Bash(/Users/johnlindquist/Library/pnpm/nodejs/22.15.1/lib/node_modules/chromancer/bin/run.js screenshot google-search-results.png)"
     ],
     "deny": []
   }

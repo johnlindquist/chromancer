@@ -2,6 +2,8 @@ import { Args, Command, Flags } from '@oclif/core'
 import { spawn } from 'child_process'
 import * as net from 'net'
 import * as fs from 'fs'
+import * as path from 'path'
+import * as os from 'os'
 import { execSync } from 'child_process'
 import { SessionManager } from '../session.js'
 
@@ -182,6 +184,14 @@ export default class Spawn extends Command {
 
     if (flags['user-data-dir']) {
       chromeArgs.push(`--user-data-dir=${flags['user-data-dir']}`)
+    } else {
+      // Use a temporary user data directory to ensure a separate Chrome instance
+      const tmpDir = path.join(os.tmpdir(), 'chromancer-profile')
+      if (!fs.existsSync(tmpDir)) {
+        fs.mkdirSync(tmpDir, { recursive: true })
+      }
+      chromeArgs.push(`--user-data-dir=${tmpDir}`)
+      this.log(`📁 Using temporary profile: ${tmpDir}`)
     }
 
     if (args.url && args.url !== 'about:blank') {

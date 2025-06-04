@@ -190,6 +190,41 @@ chromancer evaluate "document.querySelectorAll('.repo-list-item').length"
 chromancer stop
 ```
 
+### Tutorial: Automating Google Search
+
+This tutorial shows how to search Google using chromancer in headed mode, which allows you to interact with any CAPTCHAs that may appear:
+
+```bash
+# Step 1: Spawn Chrome in headed mode (not headless) so you can see and interact with it
+chromancer spawn
+
+# Step 2: Navigate to Google
+chromancer navigate https://www.google.com
+
+# Step 3: Type your search query
+chromancer type 'textarea[name="q"]' "hello world"
+
+# Step 4: Submit the search (using JavaScript since the button might be hidden)
+chromancer evaluate "document.querySelector('textarea[name=\"q\"]').form.submit()"
+
+# Step 5: If a CAPTCHA appears, solve it manually in the browser window
+
+# Step 6: Once past any CAPTCHA, get the search results
+chromancer evaluate "Array.from(document.querySelectorAll('h3')).slice(0, 5).map(h => h.textContent).filter(Boolean)"
+
+# Step 7: Take a screenshot of the results
+chromancer screenshot google-results.png
+
+# Step 8: Stop Chrome when done
+chromancer stop
+```
+
+**Important Notes:**
+- Use headed mode (don't use `--headless`) so you can interact with CAPTCHAs
+- Google often shows CAPTCHAs for automated browsers
+- After solving the CAPTCHA manually, continue with the remaining commands
+- The search results selector may vary based on Google's current HTML structure
+
 ### Alternative: Connect to existing Chrome
 
 If you prefer to manage Chrome manually:
@@ -288,6 +323,28 @@ On Linux/macOS, you might need to make the binary executable:
 ```bash
 chmod +x $(which chromancer)
 ```
+
+### Debugging connection issues
+
+Use the `--verbose` flag to get detailed logging information:
+
+```bash
+# Debug navigation timeouts
+chromancer navigate https://example.com --verbose
+
+# Debug connection problems
+chromancer spawn --verbose
+
+# See detailed information about page loading
+chromancer navigate https://slow-site.com --verbose --timeout 60000
+```
+
+The verbose flag provides:
+- Detailed connection timing and browser information
+- All network requests and responses during navigation
+- Page load events and performance metrics
+- Error details with stack traces
+- Console messages from the page
 
 ## Contributing
 

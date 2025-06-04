@@ -38,7 +38,7 @@ export default class Screenshot extends BaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(Screenshot)
     
-    await this.connectToChrome(flags.port, flags.host, flags.launch)
+    await this.connectToChrome(flags.port, flags.host, flags.launch, flags.verbose, flags.keepOpen)
     
     if (!this.page) {
       this.error('No page available')

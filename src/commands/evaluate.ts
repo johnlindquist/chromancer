@@ -27,7 +27,7 @@ export default class Evaluate extends BaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(Evaluate)
     
-    await this.connectToChrome(flags.port, flags.host, flags.launch)
+    await this.connectToChrome(flags.port, flags.host, flags.launch, flags.verbose, flags.keepOpen)
     
     if (!this.page) {
       this.error('No page available')
