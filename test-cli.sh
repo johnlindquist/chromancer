@@ -4,7 +4,7 @@ echo "Chrome DevTools Protocol CLI Test Script"
 echo "========================================"
 echo ""
 echo "Before running this script, make sure Chrome is running with:"
-echo "google-chrome --remote-debugging-port=9222 --headless=new"
+echo "chromancer spawn --headless"
 echo ""
 echo "Press Enter to continue..."
 read

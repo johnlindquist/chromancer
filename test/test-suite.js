@@ -77,9 +77,9 @@ async function main() {
   if (!chromeConnected) {
     log(`Chrome is not running on port ${CHROME_PORT}`, RED);
     log('Please start Chrome with:', YELLOW);
-    log(`  google-chrome --remote-debugging-port=${CHROME_PORT} --headless=new`, YELLOW);
+    log(`  chromancer spawn --headless --port ${CHROME_PORT}`, YELLOW);
     log('Or for testing with GUI:', YELLOW);
-    log(`  google-chrome --remote-debugging-port=${CHROME_PORT}`, YELLOW);
+    log(`  chromancer spawn --port ${CHROME_PORT}`, YELLOW);
     process.exit(1);
   }
 

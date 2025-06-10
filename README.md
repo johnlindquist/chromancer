@@ -10,6 +10,7 @@ A command-line interface for automating Chrome browser using the Chrome DevTools
 
 - 🚀 Spawn Chrome instances with automatic port management
 - 🔄 Session management - all commands work with your active Chrome instance
+- 🎮 **Interactive REPL mode** - Execute commands interactively with autocomplete and history
 - 🌐 Navigate to URLs with various wait conditions
 - 🖱️ Click elements using CSS selectors
 - ⌨️ Type text into input fields
@@ -179,6 +180,43 @@ chromancer screenshot screenshot.png
 chromancer screenshot fullpage.png --full-page
 ```
 
+### Interactive Mode (REPL)
+
+Start an interactive session where you can execute commands without reconnecting to Chrome each time:
+
+```bash
+# Start interactive mode
+chromancer interactive
+# or use the alias
+chromancer session
+
+# With options
+chromancer interactive --launch
+chromancer session --port 9223
+```
+
+In interactive mode:
+- Tab completion for commands
+- Command history (up/down arrows)
+- Persistent Chrome connection
+- Type `help` for available commands
+- Type `exit` to quit
+
+Interactive commands:
+- `navigate <url>` - Navigate to URL
+- `click <selector>` - Click element
+- `type <selector> <text>` - Type text
+- `evaluate <js>` - Execute JavaScript
+- `screenshot [filename]` - Take screenshot
+- `select <selector>` - Find elements
+- `back/forward/reload` - Browser navigation
+- `url/title` - Get page info
+- `viewport [width] [height]` - Get/set viewport
+- `cookies` - List cookies
+- `help` - Show commands
+- `clear` - Clear console
+- `exit` - Exit session
+
 ## Global Options
 
 All commands (except spawn and stop) support these options:
@@ -247,17 +285,10 @@ chromancer stop
 
 ### Alternative: Connect to existing Chrome
 
-If you prefer to manage Chrome manually:
+If you already have Chrome running with remote debugging enabled:
 
 ```bash
-# Start Chrome manually
-# Linux/Mac:
-google-chrome --remote-debugging-port=9222
-
-# Windows:
-chrome.exe --remote-debugging-port=9222
-
-# Use the CLI commands
+# Use the CLI commands with the specific port
 chromancer navigate https://example.com --port 9222
 ```
 

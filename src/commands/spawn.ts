@@ -127,7 +127,7 @@ export default class Spawn extends Command {
       
       // Try to find Chrome via 'which' command on Unix-like systems
       try {
-        const chromePath = execSync('which chromium || which chromium-browser || which google-chrome || which chrome', { encoding: 'utf8' }).trim();
+        const chromePath = execSync('which chromium || which chromium-browser || which chrome', { encoding: 'utf8' }).trim();
         if (chromePath) {
           return chromePath.split('\n')[0]; // Return first found
         }

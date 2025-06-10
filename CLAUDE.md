@@ -2,22 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
-
-This repository contains two main components:
-
-1. **Claude Code** - An agentic coding CLI tool (root directory)
-2. **CDP-CLI** - A Chrome DevTools Protocol CLI tool for web automation (cdp-cli subdirectory)
-
 ## Common Development Commands
-
-### CDP-CLI Project Commands
-
-Navigate to the `cdp-cli` directory first:
-
-```bash
-cd cdp-cli
-```
 
 **Build the project:**
 ```bash
@@ -46,11 +31,9 @@ node test/test-suite.js
 
 **Start Chrome for testing:**
 ```bash
-# Headless mode
-google-chrome --remote-debugging-port=9222 --headless=new
-
-# With GUI
-google-chrome --remote-debugging-port=9222
+# Use the spawn command (recommended)
+chromancer spawn --headless
+chromancer spawn https://example.com
 
 # Or use Docker
 docker run -d --name chrome-test -p 9222:9222 zenika/alpine-chrome \

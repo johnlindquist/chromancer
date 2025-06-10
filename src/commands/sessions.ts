@@ -152,7 +152,7 @@ export default class Sessions extends Command {
   private displayInstances(instances: ChromeInstance[], verbose: boolean): void {
     if (instances.length === 0) {
       this.log('❌ No Chrome instances with remote debugging found')
-      this.log('💡 Start Chrome with: google-chrome --remote-debugging-port=9222')
+      this.log('💡 Start Chrome with: chromancer spawn')
       return
     }
 

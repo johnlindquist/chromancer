@@ -166,7 +166,7 @@ export abstract class BaseCommand extends Command {
 Possible solutions:
 1. Use --launch flag to start a new Chrome instance
 2. Use 'chromancer spawn' to start a persistent Chrome instance
-3. Start Chrome manually with: google-chrome --remote-debugging-port=${port}
+3. Start Chrome manually with remote debugging enabled on port ${port}
 4. If Chrome is already running, you may need to close it first`);
       }
     }
