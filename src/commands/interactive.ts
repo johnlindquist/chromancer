@@ -17,7 +17,7 @@ export default class Interactive extends BaseCommand {
   static examples = [
     '<%= config.bin %> <%= command.id %>',
     '<%= config.bin %> <%= command.id %> --port 9222',
-    '<%= config.bin %> <%= command.id %> --launch',
+    '<%= config.bin %> <%= command.id %> --launch --profile work',
   ]
 
   static flags = {
@@ -35,6 +35,8 @@ export default class Interactive extends BaseCommand {
     evaluate: 'Evaluate JavaScript in the browser',
     screenshot: 'Take a screenshot',
     select: 'Select elements on the page',
+    wait: 'Wait for an element or condition',
+    hover: 'Hover over an element',
     back: 'Go back in browser history',
     forward: 'Go forward in browser history',
     reload: 'Reload the current page',
@@ -42,6 +44,7 @@ export default class Interactive extends BaseCommand {
     title: 'Get the page title',
     cookies: 'List all cookies',
     viewport: 'Set or get viewport size',
+    login: 'Navigate and wait for login',
     help: 'Show available commands',
     clear: 'Clear the console',
     exit: 'Exit interactive mode',
@@ -57,7 +60,15 @@ export default class Interactive extends BaseCommand {
     const { flags } = await this.parse(Interactive)
     
     // Connect to Chrome
-    await this.connectToChrome(flags.port, flags.host, flags.launch, flags.verbose, true) // Always keep open in interactive mode
+    await this.connectToChrome(
+      flags.port,
+      flags.host,
+      flags.launch,
+      flags.profile,
+      flags.headless,
+      flags.verbose,
+      true // Always keep open in interactive mode
+    )
     
     if (!this.page) {
       this.error('No page available')
@@ -95,7 +106,7 @@ export default class Interactive extends BaseCommand {
         try {
           await this.executeCommand(trimmedInput)
         } catch (error: any) {
-          this.log(`Error: ${error.message}`)
+          this.log(`❌ Error: ${error.message}`)
           this.logVerbose('Command execution error', error)
         }
       }
@@ -219,6 +230,22 @@ export default class Interactive extends BaseCommand {
         await this.select(selectSelector)
         break
 
+      case 'wait':
+        if (args.length === 0) {
+          this.log('Usage: wait <selector>')
+          return
+        }
+        await this.wait(args.join(' '))
+        break
+
+      case 'hover':
+        if (args.length === 0) {
+          this.log('Usage: hover <selector>')
+          return
+        }
+        await this.hover(args.join(' '))
+        break
+
       case 'back':
         await this.goBack()
         break
@@ -254,6 +281,16 @@ export default class Interactive extends BaseCommand {
         }
         break
 
+      case 'login':
+        if (args.length === 0) {
+          this.log('Usage: login <url> [ready-selector]')
+          return
+        }
+        const loginUrl = args[0]
+        const readySelector = args[1]
+        await this.waitForLogin(loginUrl, readySelector)
+        break
+
       default:
         this.log(`Unknown command: ${command}`)
         this.log('Type "help" for available commands')
@@ -275,6 +312,9 @@ export default class Interactive extends BaseCommand {
     this.log('  type input[name="search"] hello world')
     this.log('  evaluate document.title')
     this.log('  screenshot output.png')
+    this.log('  wait .loading-complete')
+    this.log('  hover .dropdown-menu')
+    this.log('  login https://gmail.com')
     this.log('')
   }
 
@@ -286,7 +326,7 @@ export default class Interactive extends BaseCommand {
       url = 'https://' + url
     }
     
-    this.log(`Navigating to ${url}...`)
+    this.log(`🌐 Navigating to ${url}...`)
     await this.page.goto(url, { waitUntil: 'load' })
     this.log(`✅ Navigated to ${url}`)
   }
@@ -294,7 +334,7 @@ export default class Interactive extends BaseCommand {
   private async click(selector: string): Promise<void> {
     if (!this.page) return
     
-    this.log(`Clicking ${selector}...`)
+    this.log(`🖱️  Clicking ${selector}...`)
     await this.page.click(selector)
     this.log(`✅ Clicked ${selector}`)
   }
@@ -302,7 +342,7 @@ export default class Interactive extends BaseCommand {
   private async type(selector: string, text: string): Promise<void> {
     if (!this.page) return
     
-    this.log(`Typing into ${selector}...`)
+    this.log(`⌨️  Typing into ${selector}...`)
     await this.page.type(selector, text)
     this.log(`✅ Typed "${text}" into ${selector}`)
   }
@@ -311,13 +351,10 @@ export default class Interactive extends BaseCommand {
     if (!this.page) return
     
     try {
-      const result = await this.page.evaluate((code) => {
-        return eval(code)
-      }, code)
-      
-      this.log('Result:', result)
+      const result = await this.page.evaluate(code)
+      this.log('📤 Result:', JSON.stringify(result, null, 2))
     } catch (error: any) {
-      this.log('Evaluation error:', error.message)
+      this.log('❌ Evaluation error:', error.message)
     }
   }
 
@@ -329,8 +366,8 @@ export default class Interactive extends BaseCommand {
       filename += '.png'
     }
     
-    this.log(`Taking screenshot...`)
-    await this.page.screenshot({ path: filename as any, fullPage: true })
+    this.log(`📸 Taking screenshot...`)
+    await this.page.screenshot({ path: filename, fullPage: true })
     this.log(`✅ Screenshot saved to ${filename}`)
   }
 
@@ -338,28 +375,45 @@ export default class Interactive extends BaseCommand {
     if (!this.page) return
     
     try {
-      const elements = await this.page.$$(selector)
-      this.log(`Found ${elements.length} elements matching "${selector}"`)
+      const count = await this.page.locator(selector).count()
+      this.log(`🔍 Found ${count} elements matching "${selector}"`)
       
-      if (elements.length > 0 && elements.length <= 10) {
+      if (count > 0 && count <= 10) {
         // Show details for up to 10 elements
-        for (let i = 0; i < elements.length; i++) {
-          const tagName = await elements[i].evaluate(el => el.tagName.toLowerCase())
-          const text = await elements[i].evaluate(el => el.textContent?.trim() || '')
-          const className = await elements[i].evaluate(el => el.className || '')
+        for (let i = 0; i < count; i++) {
+          const element = this.page.locator(selector).nth(i)
+          const tagName = await element.evaluate(el => el.tagName.toLowerCase())
+          const text = await element.textContent() || ''
+          const className = await element.getAttribute('class') || ''
           
           this.log(`[${i}] <${tagName}${className ? ` class="${className}"` : ''}> ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`)
         }
       }
     } catch (error: any) {
-      this.log('Selection error:', error.message)
+      this.log('❌ Selection error:', error.message)
     }
+  }
+
+  private async wait(selector: string): Promise<void> {
+    if (!this.page) return
+    
+    this.log(`⏳ Waiting for ${selector}...`)
+    await this.page.waitForSelector(selector, { state: 'visible' })
+    this.log(`✅ Element ${selector} is visible`)
+  }
+
+  private async hover(selector: string): Promise<void> {
+    if (!this.page) return
+    
+    this.log(`🎯 Hovering over ${selector}...`)
+    await this.page.hover(selector)
+    this.log(`✅ Hovered over ${selector}`)
   }
 
   private async goBack(): Promise<void> {
     if (!this.page) return
     
-    this.log('Going back...')
+    this.log('⬅️  Going back...')
     await this.page.goBack()
     this.log('✅ Navigated back')
   }
@@ -367,7 +421,7 @@ export default class Interactive extends BaseCommand {
   private async goForward(): Promise<void> {
     if (!this.page) return
     
-    this.log('Going forward...')
+    this.log('➡️  Going forward...')
     await this.page.goForward()
     this.log('✅ Navigated forward')
   }
@@ -375,7 +429,7 @@ export default class Interactive extends BaseCommand {
   private async reload(): Promise<void> {
     if (!this.page) return
     
-    this.log('Reloading page...')
+    this.log('🔄 Reloading page...')
     await this.page.reload()
     this.log('✅ Page reloaded')
   }
@@ -384,21 +438,21 @@ export default class Interactive extends BaseCommand {
     if (!this.page) return
     
     const url = this.page.url()
-    this.log('Current URL:', url)
+    this.log('🔗 Current URL:', url)
   }
 
   private async showTitle(): Promise<void> {
     if (!this.page) return
     
     const title = await this.page.title()
-    this.log('Page title:', title)
+    this.log('📄 Page title:', title)
   }
 
   private async showCookies(): Promise<void> {
     if (!this.page) return
     
-    const cookies = await this.page.cookies()
-    this.log(`Found ${cookies.length} cookies:`)
+    const cookies = await this.page.context().cookies()
+    this.log(`🍪 Found ${cookies.length} cookies:`)
     
     cookies.forEach(cookie => {
       this.log(`  ${cookie.name}: ${cookie.value.substring(0, 50)}${cookie.value.length > 50 ? '...' : ''}`)
@@ -408,16 +462,16 @@ export default class Interactive extends BaseCommand {
   private async setViewport(width: number, height: number): Promise<void> {
     if (!this.page) return
     
-    await this.page.setViewport({ width, height })
+    await this.page.setViewportSize({ width, height })
     this.log(`✅ Viewport set to ${width}x${height}`)
   }
 
   private async showViewport(): Promise<void> {
     if (!this.page) return
     
-    const viewport = this.page.viewport()
+    const viewport = this.page.viewportSize()
     if (viewport) {
-      this.log('Current viewport:', `${viewport.width}x${viewport.height}`)
+      this.log('📐 Current viewport:', `${viewport.width}x${viewport.height}`)
     } else {
       this.log('No viewport set')
     }

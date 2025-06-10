@@ -26,7 +26,7 @@
     "scraping",
     "browser",
     "cli",
-    "puppeteer",
+    "playwright",
     "testing",
     "web-automation"
   ],
@@ -51,7 +51,7 @@
     "clipboardy": "^2.3.0",
     "inquirer": "^8.2.6",
     "oclif": "^4.18.0",
-    "puppeteer-core": "^24.10.0",
+    "playwright": "^1.52.0",
     "typescript": "^5.8.3"
   },
   "oclif": {
