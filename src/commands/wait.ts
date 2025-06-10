@@ -1,8 +1,8 @@
-import {Flags} from '@oclif/core'
-import {Page} from 'puppeteer-core'
-import {BaseCommand} from '../base.js'
-import {waitForElement} from '../utils/selectors.js'
-import {handleCommandError, isTimeoutError} from '../utils/errors.js'
+import { Flags } from '@oclif/core'
+import { Page } from 'playwright'
+import { BaseCommand } from '../base.js'
+import { waitForElement } from '../utils/selectors.js'
+import { handleCommandError, isTimeoutError } from '../utils/errors.js'
 
 export default class Wait extends BaseCommand {
   static description = 'Wait for elements or conditions before proceeding'
@@ -13,6 +13,7 @@ export default class Wait extends BaseCommand {
     '<%= config.bin %> <%= command.id %> --condition "document.readyState === \'complete\'"',
     '<%= config.bin %> <%= command.id %> --page-load',
     '<%= config.bin %> <%= command.id %> --network-idle',
+    '<%= config.bin %> <%= command.id %> --url "https://example.com"',
   ]
 
   static flags = {
@@ -46,32 +47,46 @@ export default class Wait extends BaseCommand {
       description: 'Wait for network to be idle',
       default: false,
     }),
+    url: Flags.string({
+      description: 'Wait for URL to match (supports partial match)',
+    }),
+    text: Flags.string({
+      description: 'Wait for text to appear in the page',
+    }),
   }
 
   async run(): Promise<void> {
-    const {flags} = await this.parse(Wait)
+    const { flags } = await this.parse(Wait)
     
-    await this.connectToChrome(flags.port, flags.host, flags.launch, flags.verbose, flags.keepOpen)
+    await this.connectToChrome(
+      flags.port,
+      flags.host,
+      flags.launch,
+      flags.profile,
+      flags.headless,
+      flags.verbose,
+      flags.keepOpen
+    )
     
     if (!this.page) {
       this.error('Failed to connect to Chrome')
     }
 
-    await this.executeCommand(this.page)
+    await this.executeCommand(this.page!)
   }
 
   private async executeCommand(page: Page): Promise<void> {
-    const {flags} = await this.parse(Wait)
+    const { flags } = await this.parse(Wait)
     
     const waitPromises: Promise<any>[] = []
     const waitDescriptions: string[] = []
 
-    // Wait for selector
+    // Wait for selector with visibility state
     if (flags.selector) {
       if (flags.visible) {
         waitPromises.push(
           waitForElement(page, flags.selector, { 
-            visible: true, 
+            state: 'visible', 
             timeout: flags.timeout 
           })
         )
@@ -79,7 +94,7 @@ export default class Wait extends BaseCommand {
       } else if (flags.hidden) {
         waitPromises.push(
           waitForElement(page, flags.selector, { 
-            hidden: true, 
+            state: 'hidden', 
             timeout: flags.timeout 
           })
         )
@@ -104,57 +119,84 @@ export default class Wait extends BaseCommand {
 
     // Wait for page load
     if (flags['page-load']) {
-      waitPromises.push(page.waitForNavigation({
-        waitUntil: 'load',
+      waitPromises.push(page.waitForLoadState('load', {
         timeout: flags.timeout,
-      }).catch(() => {
-        // If no navigation happens, check if page is already loaded
-        return page.evaluate('document.readyState === "complete"')
       }))
       waitDescriptions.push('page load')
     }
 
     // Wait for network idle
     if (flags['network-idle']) {
-      waitPromises.push(page.waitForNavigation({
-        waitUntil: 'networkidle0',
+      waitPromises.push(page.waitForLoadState('networkidle', {
         timeout: flags.timeout,
-      }).catch(() => {
-        // If no navigation happens, assume network is already idle
-        return Promise.resolve()
       }))
       waitDescriptions.push('network idle')
     }
 
+    // Wait for URL
+    if (flags.url) {
+      waitPromises.push(page.waitForURL(flags.url, {
+        timeout: flags.timeout,
+      }))
+      waitDescriptions.push(`URL to match "${flags.url}"`)
+    }
+
+    // Wait for text
+    if (flags.text) {
+      waitPromises.push(
+        page.waitForFunction(
+          (text) => document.body.textContent?.includes(text),
+          flags.text,
+          { timeout: flags.timeout }
+        )
+      )
+      waitDescriptions.push(`text "${flags.text}" to appear`)
+    }
+
     // If no wait conditions specified, show error
     if (waitPromises.length === 0) {
-      this.error('No wait condition specified. Use --selector, --condition, --page-load, or --network-idle')
+      this.error('No wait condition specified. Use --selector, --condition, --page-load, --network-idle, --url, or --text')
     }
 
     try {
+      this.log(`⏳ Waiting for ${waitDescriptions.join(' and ')}...`)
+      
       // Wait for all conditions
       await Promise.all(waitPromises)
       
       if (waitDescriptions.length === 1) {
         if (flags.selector && flags.visible) {
-          this.log(`Element is visible: ${flags.selector}`)
+          this.log(`✅ Element is visible: ${flags.selector}`)
         } else if (flags.selector && flags.hidden) {
-          this.log(`Element is hidden: ${flags.selector}`)
+          this.log(`✅ Element is hidden: ${flags.selector}`)
         } else if (flags.selector) {
-          this.log(`Element found: ${flags.selector}`)
+          this.log(`✅ Element found: ${flags.selector}`)
         } else if (flags.condition) {
-          this.log(`Condition met: ${flags.condition}`)
+          this.log(`✅ Condition met: ${flags.condition}`)
         } else if (flags['page-load']) {
-          this.log('Page loaded')
+          this.log('✅ Page loaded')
         } else if (flags['network-idle']) {
-          this.log('Network idle')
+          this.log('✅ Network idle')
+        } else if (flags.url) {
+          this.log(`✅ URL matched: ${page.url()}`)
+        } else if (flags.text) {
+          this.log(`✅ Text found: "${flags.text}"`)
         }
       } else {
-        this.log(`All conditions met: ${waitDescriptions.join(', ')}`)
+        this.log(`✅ All conditions met`)
+      }
+
+      // Log additional info if verbose
+      if (flags.verbose) {
+        this.logVerbose('Wait completed', {
+          conditions: waitDescriptions,
+          currentUrl: page.url(),
+          title: await page.title(),
+        })
       }
     } catch (error: any) {
       if (isTimeoutError(error)) {
-        this.error(`Timeout waiting for ${waitDescriptions.join(', ')}`)
+        this.error(`Timeout waiting for ${waitDescriptions.join(' and ')} (${flags.timeout}ms)`)
       }
       const commandError = handleCommandError(error, 'wait')
       this.error(commandError.message)

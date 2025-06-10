@@ -1,13 +1,15 @@
 import { Command, Flags } from '@oclif/core'
-import puppeteer, { Browser, Page } from 'puppeteer-core'
+import { chromium, Browser, Page, BrowserContext } from 'playwright'
 import { SessionManager } from './session.js'
+import * as path from 'path'
+import * as os from 'os'
 
 export abstract class BaseCommand extends Command {
   static baseFlags = {
     port: Flags.integer({
       char: 'p',
-      description: 'Chrome debugging port (uses active session if available)',
-      required: false,
+      description: 'Chrome debugging port',
+      default: 9222,
     }),
     host: Flags.string({
       char: 'h',
@@ -16,7 +18,14 @@ export abstract class BaseCommand extends Command {
     }),
     launch: Flags.boolean({
       char: 'l',
-      description: 'Launch Chrome automatically (requires Chrome/Chromium installed)',
+      description: 'Launch Chrome automatically',
+      default: false,
+    }),
+    profile: Flags.string({
+      description: 'Chrome profile name or path to use',
+    }),
+    headless: Flags.boolean({
+      description: 'Run Chrome in headless mode',
       default: false,
     }),
     verbose: Flags.boolean({
@@ -26,18 +35,18 @@ export abstract class BaseCommand extends Command {
     }),
     keepOpen: Flags.boolean({
       char: 'k',
-      description: 'Keep Chrome open after command completes (when using --launch)',
+      description: 'Keep Chrome open after command completes',
       default: true,
       allowNo: true,
     }),
   }
 
   protected browser?: Browser
+  protected context?: BrowserContext
   protected page?: Page
   private isLaunched = false
   protected verbose = false
   private keepOpen = false
-  private chromePid?: number
 
   protected logVerbose(message: string, data?: any): void {
     if (this.verbose) {
@@ -51,114 +60,86 @@ export abstract class BaseCommand extends Command {
     }
   }
 
-  async connectToChrome(port: number | undefined, host: string, launch: boolean = false, verbose: boolean = false, keepOpen: boolean = false): Promise<void> {
+  private getProfilePath(profileName: string): string {
+    // If it's already an absolute path, use it
+    if (path.isAbsolute(profileName)) {
+      return profileName
+    }
+
+    // Otherwise, create profile in user's home directory
+    const platform = process.platform
+    let profileBase: string
+
+    if (platform === 'win32') {
+      profileBase = path.join(os.homedir(), 'AppData', 'Local', 'chromancer', 'profiles')
+    } else if (platform === 'darwin') {
+      profileBase = path.join(os.homedir(), 'Library', 'Application Support', 'chromancer', 'profiles')
+    } else {
+      profileBase = path.join(os.homedir(), '.config', 'chromancer', 'profiles')
+    }
+
+    return path.join(profileBase, profileName)
+  }
+
+  async connectToChrome(
+    port: number = 9222,
+    host: string = 'localhost',
+    launch: boolean = false,
+    profile?: string,
+    headless: boolean = false,
+    verbose: boolean = false,
+    keepOpen: boolean = true
+  ): Promise<void> {
     this.verbose = verbose
     this.keepOpen = keepOpen
     const startTime = Date.now()
     
-    this.logVerbose('Starting Chrome connection process', { port, host, launch })
-    
-    // Check for active session first
-    const session = SessionManager.loadSession()
-    if (session && !port) {
-      // Verify the session is still valid by checking if Chrome is still running
-      try {
-        const testResponse = await fetch(`http://${host}:${session.port}/json/version`)
-        if (testResponse.ok) {
-          port = session.port
-          this.log(`🔄 Found saved Chrome session on port ${port}`)
-          this.logVerbose('Using saved session', session)
-        } else {
-          SessionManager.clearSession()
-          this.logVerbose('Saved session no longer valid')
-        }
-      } catch (error) {
-        SessionManager.clearSession()
-        this.logVerbose('Saved session no longer valid')
-      }
-    }
-    
-    if (!port) {
-      port = 9222 // Default port
-      this.logVerbose('No port specified, using default port 9222')
-    }
+    this.logVerbose('Starting Chrome connection process', { port, host, launch, profile, headless })
     
     const browserURL = `http://${host}:${port}`
-    this.log(`🔍 Checking for existing Chrome instance at ${browserURL}...`)
     
     try {
       // First try to connect to existing Chrome instance
-      const connectStart = Date.now()
-      this.browser = await puppeteer.connect({
-        browserURL: browserURL,
-        defaultViewport: null,
-      });
-      const connectTime = Date.now() - connectStart
+      this.log(`🔍 Attempting to connect to Chrome at ${browserURL}...`)
       
-      this.log('✅ Connected to existing Chrome instance');
-      this.logVerbose(`Connection successful in ${connectTime}ms`)
+      this.browser = await chromium.connectOverCDP(browserURL)
+      this.context = this.browser.contexts()[0]
       
-      // Get browser version and other details
-      const version = await this.browser.version()
-      this.logVerbose('Browser details', { version, browserURL })
+      this.log('✅ Connected to existing Chrome instance')
+      this.logVerbose(`Connection successful in ${Date.now() - startTime}ms`)
     } catch (connectError: any) {
       this.log(`❌ No existing Chrome instance found at ${browserURL}`)
-      this.logVerbose('Connection failed', { error: connectError.message || connectError })
+      this.logVerbose('Connection failed', { error: connectError.message })
+      
       if (launch) {
-        // Try to launch Chrome
         try {
-          this.log('🚀 Launching new Chrome instance...');
-          const executablePath = this.findChromeExecutable()
-          this.logVerbose('Found Chrome executable', { executablePath })
+          this.log('🚀 Launching new Chrome instance...')
           
-          const launchStart = Date.now()
-          // Use a temporary user data directory to ensure a separate Chrome instance
-          const tmpDir = require('path').join(require('os').tmpdir(), 'chromancer-profile')
-          if (!require('fs').existsSync(tmpDir)) {
-            require('fs').mkdirSync(tmpDir, { recursive: true })
-          }
-          
-          const launchOptions = {
-            headless: false,
+          const launchOptions: any = {
+            headless,
             args: [
-              '--no-sandbox',
-              '--disable-setuid-sandbox',
               `--remote-debugging-port=${port}`,
-              '--disable-background-timer-throttling',
-              '--disable-backgrounding-occluded-windows',
-              '--disable-renderer-backgrounding',
-              `--user-data-dir=${tmpDir}`,
               '--no-first-run',
-              '--no-default-browser-check'
+              '--no-default-browser-check',
             ],
-            executablePath: executablePath,
-            handleSIGINT: false,
-            handleSIGTERM: false,
-            handleSIGHUP: false,
-            detached: true
-          }
-          this.logVerbose('Launch options', launchOptions)
-          
-          this.browser = await puppeteer.launch(launchOptions);
-          const launchTime = Date.now() - launchStart
-          
-          // Get the Chrome process PID
-          const browserProcess = this.browser.process();
-          if (browserProcess) {
-            this.chromePid = browserProcess.pid;
-            this.logVerbose(`Chrome process PID: ${this.chromePid}`);
+            channel: 'chrome',
           }
           
-          this.isLaunched = true;
-          this.log(`✅ Chrome launched successfully on port ${port}`);
-          this.logVerbose(`Chrome launched in ${launchTime}ms`)
+          // Add profile support
+          if (profile) {
+            const profilePath = this.getProfilePath(profile)
+            this.log(`📁 Using Chrome profile: ${profilePath}`)
+            launchOptions.args.push(`--user-data-dir=${profilePath}`)
+          }
           
-          // Get browser version after launch
-          const version = await this.browser.version()
-          this.logVerbose('Launched browser details', { version })
+          this.browser = await chromium.launch(launchOptions)
+          this.context = await this.browser.newContext()
+          this.isLaunched = true
+          
+          this.log(`✅ Chrome launched successfully${profile ? ` with profile "${profile}"` : ''}`)
+          this.logVerbose(`Chrome launched in ${Date.now() - startTime}ms`)
         } catch (launchError: any) {
-          this.logVerbose('Launch failed', { error: launchError.message || launchError })
-          this.error(`Failed to connect to or launch Chrome: ${connectError}\nLaunch error: ${launchError}`);
+          this.error(`Failed to launch Chrome: ${launchError.message}`)
         }
       } else {
         this.error(`Failed to connect to Chrome at ${host}:${port}. 
@@ -166,14 +147,15 @@ export abstract class BaseCommand extends Command {
 Possible solutions:
 1. Use --launch flag to start a new Chrome instance
 2. Use 'chromancer spawn' to start a persistent Chrome instance
-3. Start Chrome manually with remote debugging enabled on port ${port}
-4. If Chrome is already running, you may need to close it first`);
+3. Start Chrome manually with: chrome --remote-debugging-port=${port}`)
       }
     }
 
-    if (this.browser) {
-      const pages = await this.browser.pages();
-      this.page = pages[0] || await this.browser.newPage();
+    if (this.browser && this.context) {
+      // Get or create a page
+      const pages = this.context.pages()
+      this.page = pages[0] || await this.context.newPage()
+      
       this.logVerbose('Page setup complete', { 
         totalPages: pages.length,
         newPageCreated: pages.length === 0
@@ -184,118 +166,71 @@ Possible solutions:
     }
   }
 
-  private findChromeExecutable(): string | undefined {
-    const { execSync } = require('child_process');
-    const fs = require('fs');
-    const platform = process.platform;
-    
-    // Common Chrome/Chromium executable paths by platform
-    const paths: string[] = [];
-    
-    if (platform === 'win32') {
-      // Windows paths
-      paths.push(
-        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-        'C:\\Program Files\\Chromium\\Application\\chrome.exe',
-        'C:\\Program Files (x86)\\Chromium\\Application\\chrome.exe'
-      );
-      
-      // Try to find Chrome via where command on Windows
-      try {
-        const chromePath = execSync('where chrome.exe', { encoding: 'utf8' }).trim();
-        if (chromePath) {
-          return chromePath.split('\n')[0];
-        }
-      } catch {
-        // Try another method
-      }
-      
-      // Try to find Chrome via registry
-      try {
-        const regPath = execSync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe" /v Path', { encoding: 'utf8' });
-        const match = regPath.match(/REG_SZ\s+(.+)/i);
-        if (match && match[1]) {
-          const chromePath = match[1].trim() + '\\chrome.exe';
-          if (fs.existsSync(chromePath)) {
-            return chromePath;
-          }
-        }
-      } catch {
-        // Registry query failed, continue
-      }
-    } else if (platform === 'darwin') {
-      // macOS paths
-      paths.push(
-        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-        '/Applications/Chromium.app/Contents/MacOS/Chromium',
-        '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary'
-      );
-    } else {
-      // Linux paths
-      paths.push(
-        '/usr/bin/chromium',
-        '/usr/bin/chromium-browser',
-        '/usr/bin/google-chrome',
-        '/usr/bin/google-chrome-stable',
-        '/usr/local/bin/chrome',
-        '/snap/bin/chromium'
-      );
-      
-      // Try to find Chrome via 'which' command on Unix-like systems
-      try {
-        const chromePath = execSync('which chromium || which chromium-browser || which google-chrome || which chrome', { encoding: 'utf8' }).trim();
-        if (chromePath) {
-          return chromePath.split('\n')[0]; // Return first found
-        }
-      } catch {
-        // Continue to check predefined paths
-      }
+  async waitForLogin(url: string, readySelector?: string): Promise<void> {
+    if (!this.page) {
+      this.error('No page available')
     }
 
-    // Check predefined paths
-    for (const path of paths) {
-      if (fs.existsSync(path)) {
-        return path;
-      }
+    this.log(`🔐 Navigating to ${url}...`)
+    await this.page!.goto(url, { waitUntil: 'domcontentloaded' })
+    
+    const checkSelector = readySelector || 'body'
+    
+    this.log(`⏳ Waiting for you to log in...`)
+    this.log(`   (Looking for element: ${checkSelector})`)
+    this.log(`   Press Ctrl+C to cancel`)
+    
+    // Check if already logged in
+    try {
+      await this.page!.waitForSelector(checkSelector, { timeout: 1000 })
+      this.log('✅ Already logged in!')
+      return
+    } catch {
+      // Not logged in yet, continue waiting
     }
-
-    return undefined;
+    
+    // Wait for login with visual feedback
+    let dots = 0
+    const loadingInterval = setInterval(() => {
+      process.stdout.write(`\r⏳ Waiting for login${'.'.repeat(dots % 4)}    `)
+      dots++
+    }, 500)
+    
+    try {
+      // Wait for either the ready selector or a common logged-in indicator
+      await this.page!.waitForSelector(checkSelector, { timeout: 300000 }) // 5 minute timeout
+      
+      clearInterval(loadingInterval)
+      process.stdout.write('\r')
+      this.log('✅ Login detected! Continuing...')
+      
+      // Give the page a moment to fully load after login
+      await this.page!.waitForLoadState('networkidle')
+    } catch (error: any) {
+      clearInterval(loadingInterval)
+      process.stdout.write('\r')
+      if (error.name === 'TimeoutError') {
+        this.error('Timeout waiting for login (5 minutes)')
+      }
+      throw error
+    }
   }
 
   async finally(): Promise<void> {
     if (this.browser) {
       if (this.isLaunched) {
         if (this.keepOpen) {
-          // Save session info before disconnecting
-          const wsEndpoint = this.browser.wsEndpoint();
-          const port = wsEndpoint.match(/:(\d+)/)?.[1];
-          
-          this.log('🔓 Keeping Chrome open (use --no-keepOpen to close automatically)');
-          this.log('⚠️  Note: Chrome may close when this process exits. Use "chromancer spawn" for persistent Chrome.');
+          this.log('🔓 Keeping Chrome open (use --no-keepOpen to close automatically)')
           // Just disconnect, don't close the browser
-          await this.browser.disconnect();
-          
-          if (port && this.chromePid) {
-            SessionManager.saveSession({
-              port: parseInt(port),
-              pid: this.chromePid,
-              startTime: Date.now()
-            });
-            this.log(`💾 Session saved on port ${port} (PID: ${this.chromePid})`);
-          } else if (port) {
-            this.log(`⚠️ Could not save session - Chrome PID not available`);
-          }
-          
-          // Force process exit since we're keeping Chrome open
-          // Node would otherwise wait for the Chrome process
-          process.exit(0);
+          // Just disconnect by not closing the browser
+          // Browser remains open
         } else {
-          this.log('🔒 Closing Chrome...');
-          await this.browser.close();
+          this.log('🔒 Closing Chrome...')
+          await this.browser.close()
         }
       } else {
-        await this.browser.disconnect();
+        // Was connected to existing instance, just disconnect
+        // Browser remains open
       }
     }
   }

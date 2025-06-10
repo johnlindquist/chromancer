@@ -1,5 +1,5 @@
 import { Args, Flags } from '@oclif/core'
-import { BaseCommand } from '../base'
+import { BaseCommand } from '../base.js'
 import * as inquirer from 'inquirer'
 import * as clipboardy from 'clipboardy'
 
@@ -9,10 +9,9 @@ export default class Select extends BaseCommand {
   static examples = [
     '<%= config.bin %> <%= command.id %> button',
     '<%= config.bin %> <%= command.id %> "a[href]"',
-    '<%= config.bin %> <%= command.id %> ".my-class" --port 9223',
-    '<%= config.bin %> <%= command.id %> "#my-id" --launch',
-    '<%= config.bin %> <%= command.id %> "input[type=text]" --attributes',
+    '<%= config.bin %> <%= command.id %> ".my-class" --attributes',
     '<%= config.bin %> <%= command.id %> button --interactive',
+    '<%= config.bin %> <%= command.id %> "input[type=text]" --limit 10',
   ]
 
   static flags = {
@@ -32,6 +31,10 @@ export default class Select extends BaseCommand {
       description: 'Interactively select an element and copy its selector to clipboard',
       default: false,
     }),
+    visible: Flags.boolean({
+      description: 'Only show visible elements',
+      default: false,
+    }),
   }
 
   static args = {
@@ -42,146 +45,157 @@ export default class Select extends BaseCommand {
   }
 
   public async run(): Promise<void> {
-    const {args, flags} = await this.parse(Select)
+    const { args, flags } = await this.parse(Select)
 
-    await this.connectToChrome(flags.port, flags.host, flags.launch, flags.verbose, flags.keepOpen)
+    await this.connectToChrome(
+      flags.port,
+      flags.host,
+      flags.launch,
+      flags.profile,
+      flags.headless,
+      flags.verbose,
+      flags.keepOpen
+    )
 
     if (!this.page) {
       this.error('No page available')
     }
 
     try {
-      const elements: any = await this.page.evaluate(`
-        (function(selector, showAttributes, limit) {
-          const matches = document.querySelectorAll(selector)
-          const results = []
-          
-          for (let i = 0; i < Math.min(matches.length, limit); i++) {
-            const el = matches[i]
-            const rect = el.getBoundingClientRect()
-            
-            // Generate best selector for element
-            function getBestSelector(element) {
-              // Priority 1: ID
-              if (element.id) {
-                return '#' + element.id
-              }
-              
-              // Priority 2: Unique class combination (skip classes with special chars)
-              if (element.className) {
-                const classes = element.className.split(' ').filter(c => c.trim())
-                // Only use classes that are valid CSS identifiers
-                const validClasses = classes.filter(c => /^[a-zA-Z_-][a-zA-Z0-9_-]*$/.test(c))
-                
-                if (validClasses.length > 0) {
-                  // Try first class alone
-                  const firstClassSelector = '.' + validClasses[0]
-                  if (document.querySelectorAll(firstClassSelector).length === 1) {
-                    return firstClassSelector
-                  }
-                  
-                  // Try combination of first few valid classes
-                  for (let i = 2; i <= Math.min(validClasses.length, 3); i++) {
-                    const classSelector = '.' + validClasses.slice(0, i).join('.')
-                    try {
-                      if (document.querySelectorAll(classSelector).length === 1) {
-                        return classSelector
-                      }
-                    } catch (e) {
-                      // Invalid selector, skip
-                    }
-                  }
-                }
-              }
-              
-              // Priority 3: Unique attribute
-              const uniqueAttrs = ['name', 'type', 'placeholder', 'aria-label', 'data-testid']
-              for (const attr of uniqueAttrs) {
-                if (element.hasAttribute(attr)) {
-                  const value = element.getAttribute(attr)
-                  const selector = element.tagName.toLowerCase() + '[' + attr + '="' + value + '"]'
-                  if (document.querySelectorAll(selector).length === 1) {
-                    return selector
-                  }
-                }
-              }
-              
-              // Priority 4: nth-of-type with parent context
-              const parent = element.parentElement
-              const siblings = parent ? Array.from(parent.children).filter(child => 
-                child.tagName === element.tagName
-              ) : []
-              const index = siblings.indexOf(element) + 1
-              
-              if (parent && parent.id) {
-                return '#' + parent.id + ' > ' + element.tagName.toLowerCase() + ':nth-of-type(' + index + ')'
-              }
-              
-              if (parent && parent.className) {
-                const parentClasses = parent.className.split(' ').filter(c => c.trim())
-                const validParentClasses = parentClasses.filter(c => /^[a-zA-Z_-][a-zA-Z0-9_-]*$/.test(c))
-                if (validParentClasses.length > 0) {
-                  return '.' + validParentClasses[0] + ' > ' + element.tagName.toLowerCase() + ':nth-of-type(' + index + ')'
-                }
-              }
-              
-              // Fallback: tag with index
-              return element.tagName.toLowerCase() + ':nth-of-type(' + index + ')'
-            }
-            
-            const elementInfo = {
-              index: i,
-              tagName: el.tagName.toLowerCase(),
-              selector: getBestSelector(el),
-              textContent: el.textContent?.trim().substring(0, 100) || '',
-              visible: rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.left >= 0,
-              position: {
-                top: Math.round(rect.top),
-                left: Math.round(rect.left),
-                width: Math.round(rect.width),
-                height: Math.round(rect.height),
-              },
-            }
-            
-            if (showAttributes) {
-              const attrs = {}
-              for (const attr of el.attributes) {
-                attrs[attr.name] = attr.value
-              }
-              elementInfo.attributes = attrs
-            }
-            
-            if (el.id) {
-              elementInfo.id = el.id
-            }
-            
-            if (el.className) {
-              elementInfo.classes = el.className.split(' ').filter(c => c.trim())
-            }
-            
-            results.push(elementInfo)
-          }
-          
-          return {
-            total: matches.length,
-            results,
-          }
-        })(${JSON.stringify(args.selector)}, ${flags.attributes}, ${flags.limit})
-      `)
+      // First check if any elements exist
+      const count = await this.page!.locator(args.selector).count()
       
-      this.log(`Found ${elements.total} element(s) matching "${args.selector}"`)
-      
-      if (elements.total === 0) {
+      if (count === 0) {
+        this.log(`❌ No elements found matching "${args.selector}"`)
         return
       }
+
+      this.log(`🔍 Found ${count} element(s) matching "${args.selector}"`)
       
-      if (elements.total > flags.limit) {
-        this.log(`Showing first ${flags.limit} results (use --limit to change)`)
+      const limit = Math.min(count, flags.limit)
+      if (count > flags.limit) {
+        this.log(`📊 Showing first ${flags.limit} results (use --limit to change)`)
       }
-      
-      if (flags.interactive) {
+
+      // Collect element information
+      const elements = []
+      for (let i = 0; i < limit; i++) {
+        const locator = this.page!.locator(args.selector).nth(i)
+        
+        // Check visibility if flag is set
+        if (flags.visible) {
+          const isVisible = await locator.isVisible()
+          if (!isVisible) continue
+        }
+
+        const elementInfo = await locator.evaluate((el, index) => {
+          const rect = el.getBoundingClientRect()
+          
+          // Generate best selector for element
+          function getBestSelector(element: Element): string {
+            // Priority 1: ID
+            if (element.id) {
+              return '#' + element.id
+            }
+            
+            // Priority 2: Unique class combination
+            if (element.className) {
+              const classes = element.className.split(' ').filter(c => c.trim())
+              const validClasses = classes.filter(c => /^[a-zA-Z_-][a-zA-Z0-9_-]*$/.test(c))
+              
+              if (validClasses.length > 0) {
+                const firstClassSelector = '.' + validClasses[0]
+                if (document.querySelectorAll(firstClassSelector).length === 1) {
+                  return firstClassSelector
+                }
+                
+                for (let i = 2; i <= Math.min(validClasses.length, 3); i++) {
+                  const classSelector = '.' + validClasses.slice(0, i).join('.')
+                  try {
+                    if (document.querySelectorAll(classSelector).length === 1) {
+                      return classSelector
+                    }
+                  } catch (e) {
+                    // Invalid selector, skip
+                  }
+                }
+              }
+            }
+            
+            // Priority 3: Unique attribute
+            const uniqueAttrs = ['name', 'type', 'placeholder', 'aria-label', 'data-testid']
+            for (const attr of uniqueAttrs) {
+              if (element.hasAttribute(attr)) {
+                const value = element.getAttribute(attr)
+                const selector = element.tagName.toLowerCase() + '[' + attr + '="' + value + '"]'
+                if (document.querySelectorAll(selector).length === 1) {
+                  return selector
+                }
+              }
+            }
+            
+            // Priority 4: nth-of-type with parent context
+            const parent = element.parentElement
+            const siblings = parent ? Array.from(parent.children).filter(child => 
+              child.tagName === element.tagName
+            ) : []
+            const indexInType = siblings.indexOf(element) + 1
+            
+            if (parent && parent.id) {
+              return '#' + parent.id + ' > ' + element.tagName.toLowerCase() + ':nth-of-type(' + indexInType + ')'
+            }
+            
+            if (parent && parent.className) {
+              const parentClasses = parent.className.split(' ').filter(c => c.trim())
+              const validParentClasses = parentClasses.filter(c => /^[a-zA-Z_-][a-zA-Z0-9_-]*$/.test(c))
+              if (validParentClasses.length > 0) {
+                return '.' + validParentClasses[0] + ' > ' + element.tagName.toLowerCase() + ':nth-of-type(' + indexInType + ')'
+              }
+            }
+            
+            // Fallback: tag with index
+            return element.tagName.toLowerCase() + ':nth-of-type(' + indexInType + ')'
+          }
+          
+          const info: any = {
+            index: index,
+            tagName: el.tagName.toLowerCase(),
+            selector: getBestSelector(el),
+            textContent: el.textContent?.trim().substring(0, 100) || '',
+            visible: rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.left >= 0,
+            position: {
+              top: Math.round(rect.top),
+              left: Math.round(rect.left),
+              width: Math.round(rect.width),
+              height: Math.round(rect.height),
+            },
+          }
+          
+          if (el.id) {
+            info.id = el.id
+          }
+          
+          if (el.className) {
+            info.classes = el.className.split(' ').filter((c: string) => c.trim())
+          }
+          
+          // Get attributes if requested
+          const attrs: Record<string, string> = {}
+          for (let i = 0; i < el.attributes.length; i++) {
+            const attr = el.attributes[i]
+            attrs[attr.name] = attr.value
+          }
+          info.attributes = attrs
+          
+          return info
+        }, i)
+        
+        elements.push(elementInfo)
+      }
+
+      if (flags.interactive && elements.length > 0) {
         // Interactive mode - show selection menu
-        const choices = elements.results.map((el: any) => {
+        const choices = elements.map((el: any) => {
           const visibilityIcon = el.visible ? '✓' : '✗'
           const text = el.textContent ? ` - "${el.textContent.substring(0, 50)}${el.textContent.length > 50 ? '...' : ''}"` : ''
           return {
@@ -203,16 +217,16 @@ export default class Select extends BaseCommand {
         
         try {
           await clipboardy.write(selectedSelector)
-          this.log(`\n✓ Copied selector to clipboard: ${selectedSelector}`)
+          this.log(`\n✅ Copied selector to clipboard: ${selectedSelector}`)
         } catch (error) {
-          this.log(`\n✗ Failed to copy to clipboard: ${selectedSelector}`)
+          this.log(`\n❌ Failed to copy to clipboard: ${selectedSelector}`)
           this.log('  You can manually copy the selector above')
         }
       } else {
         // Regular output mode
         this.log('---')
         
-        for (const el of elements.results) {
+        for (const el of elements) {
           this.log(`[${el.index}] <${el.tagName}> ${el.visible ? '✓ visible' : '✗ hidden'}`)
           this.log(`  Selector: ${el.selector}`)
           
@@ -241,6 +255,17 @@ export default class Select extends BaseCommand {
           
           this.log('')
         }
+      }
+
+      // Log summary if verbose
+      if (flags.verbose) {
+        const visibleCount = elements.filter((el: any) => el.visible).length
+        this.logVerbose('Element summary', {
+          total: count,
+          shown: elements.length,
+          visible: visibleCount,
+          hidden: elements.length - visibleCount,
+        })
       }
     } catch (error: any) {
       this.error(`Failed to select elements: ${error.message}`)

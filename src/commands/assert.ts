@@ -1,6 +1,8 @@
-import {Flags} from '@oclif/core'
-import {Page} from 'puppeteer-core'
-import {BaseCommand} from '../base.js'
+import { Flags } from '@oclif/core'
+import { Page } from 'playwright'
+import { BaseCommand } from '../base.js'
+import { safeEvaluate } from '../utils/evaluation.js'
+import Store from './store.js'
 
 export default class Assert extends BaseCommand {
   static description = 'Assert conditions about page elements or JavaScript expressions'
@@ -11,6 +13,7 @@ export default class Assert extends BaseCommand {
     '<%= config.bin %> <%= command.id %> --eval "document.title" --equals "My Page"',
     '<%= config.bin %> <%= command.id %> --selector ".items" --count 5',
     '<%= config.bin %> <%= command.id %> --eval "window.location.pathname" --equals "/checkout"',
+    '<%= config.bin %> <%= command.id %> --stored "originalPrice" --equals "99.99"',
   ]
 
   static flags = {
@@ -18,29 +21,41 @@ export default class Assert extends BaseCommand {
     selector: Flags.string({
       char: 's',
       description: 'CSS selector to assert on',
-      exclusive: ['eval'],
+      exclusive: ['eval', 'stored'],
     }),
     eval: Flags.string({
       char: 'e',
       description: 'JavaScript expression to evaluate and assert',
-      exclusive: ['selector'],
+      exclusive: ['selector', 'stored'],
+    }),
+    stored: Flags.string({
+      description: 'Assert on a previously stored value',
+      exclusive: ['selector', 'eval'],
     }),
     contains: Flags.string({
       description: 'Assert element text contains this value',
-      exclusive: ['equals', 'matches'],
+      exclusive: ['equals', 'matches', 'greater-than', 'less-than'],
     }),
     equals: Flags.string({
       description: 'Assert element text or evaluation result equals this value',
-      exclusive: ['contains', 'matches'],
+      exclusive: ['contains', 'matches', 'greater-than', 'less-than'],
     }),
     matches: Flags.string({
       description: 'Assert element text matches this regex pattern',
-      exclusive: ['contains', 'equals'],
+      exclusive: ['contains', 'equals', 'greater-than', 'less-than'],
+    }),
+    'greater-than': Flags.string({
+      description: 'Assert numeric value is greater than this',
+      exclusive: ['contains', 'equals', 'matches', 'less-than'],
+    }),
+    'less-than': Flags.string({
+      description: 'Assert numeric value is less than this',
+      exclusive: ['contains', 'equals', 'matches', 'greater-than'],
     }),
     count: Flags.string({
       description: 'Assert number of elements matching selector',
       dependsOn: ['selector'],
-      exclusive: ['contains', 'equals', 'matches', 'visible', 'not-visible', 'value'],
+      exclusive: ['contains', 'equals', 'matches', 'visible', 'not-visible', 'value', 'greater-than', 'less-than'],
     }),
     visible: Flags.boolean({
       description: 'Assert element is visible',
@@ -64,15 +79,29 @@ export default class Assert extends BaseCommand {
   }
 
   async run(): Promise<void> {
-    const {flags} = await this.parse(Assert)
+    const { flags } = await this.parse(Assert)
     
-    await this.connectToChrome(flags.port, flags.host, flags.launch, flags.verbose, flags.keepOpen)
+    // For stored value assertions, we may not need Chrome connection
+    if (flags.stored && !flags.eval && !flags.selector) {
+      await this.assertStoredValue(flags)
+      return
+    }
+    
+    await this.connectToChrome(
+      flags.port,
+      flags.host,
+      flags.launch,
+      flags.profile,
+      flags.headless,
+      flags.verbose,
+      flags.keepOpen
+    )
     
     if (!this.page) {
       this.error('Failed to connect to Chrome')
     }
 
-    await this.executeCommand(this.page, flags)
+    await this.executeCommand(this.page!, flags)
   }
 
   private async executeCommand(page: Page, flags: any): Promise<void> {
@@ -81,12 +110,14 @@ export default class Assert extends BaseCommand {
         await this.assertSelector(page, flags)
       } else if (flags.eval) {
         await this.assertEvaluation(page, flags)
+      } else if (flags.stored) {
+        await this.assertStoredValue(flags)
       } else {
-        this.error('Either --selector or --eval must be specified')
+        this.error('Either --selector, --eval, or --stored must be specified')
       }
     } catch (error: any) {
       const message = flags.message || error.message
-      this.error(`Assertion failed: ${message}`)
+      this.error(`❌ Assertion failed: ${message}`)
     }
   }
 
@@ -94,32 +125,26 @@ export default class Assert extends BaseCommand {
     const selector = flags.selector
     
     // Check if element exists
-    const elements = await page.$$(selector)
+    const count = await page.locator(selector).count()
     
-    if (elements.length === 0) {
+    if (count === 0 && !flags['not-visible']) {
       throw new Error(`Element not found: ${selector}`)
     }
     
     // Handle count assertion
     if (flags.count !== undefined) {
       const expectedCount = parseInt(flags.count)
-      if (elements.length !== expectedCount) {
-        throw new Error(`Expected ${expectedCount} elements, found ${elements.length}`)
+      if (count !== expectedCount) {
+        throw new Error(`Expected ${expectedCount} elements, found ${count}`)
       }
-      this.log(`✓ Assertion passed: Element count equals ${expectedCount}`)
+      this.log(`✅ Assertion passed: Element count equals ${expectedCount}`)
       return
     }
     
     // Handle visibility assertions
     if (flags.visible || flags['not-visible']) {
-      const isVisible = await page.evaluate(`
-        (() => {
-          const el = document.querySelector("${selector.replace(/"/g, '\\"')}");
-          if (!el) return false;
-          const style = window.getComputedStyle(el);
-          return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
-        })()
-      `)
+      const locator = page.locator(selector).first()
+      const isVisible = count > 0 && await locator.isVisible()
       
       if (flags.visible && !isVisible) {
         throw new Error(`Element is not visible: ${selector}`)
@@ -128,86 +153,120 @@ export default class Assert extends BaseCommand {
         throw new Error(`Element is visible: ${selector}`)
       }
       
-      this.log(`✓ Assertion passed: Element is ${flags.visible ? 'visible' : 'not visible'}`)
+      this.log(`✅ Assertion passed: Element is ${flags.visible ? 'visible' : 'not visible'}`)
       return
     }
     
     // Get element content for text assertions
-    const element = elements[0]
+    const element = page.locator(selector).first()
     let content: string
     
     if (flags.value !== undefined) {
       // Get input value
-      content = await page.evaluate(el => (el as any).value || '', element)
+      content = await element.inputValue() || ''
       
       if (content !== flags.value) {
         throw new Error(`Input value "${content}" does not equal "${flags.value}"`)
       }
-      this.log(`✓ Assertion passed: Input value equals "${flags.value}"`)
+      this.log(`✅ Assertion passed: Input value equals "${flags.value}"`)
       return
     } else {
       // Get text content
-      content = await page.evaluate(el => el.textContent?.trim() || '', element)
+      content = await element.textContent() || ''
+      content = content.trim()
     }
     
     // Handle text assertions
-    if (flags.contains) {
-      if (!content.includes(flags.contains)) {
-        throw new Error(`Element text "${content}" does not contain "${flags.contains}"`)
-      }
-      this.log(`✓ Assertion passed: Element text contains "${flags.contains}"`)
-    } else if (flags.equals) {
-      if (content !== flags.equals) {
-        throw new Error(`Element text "${content}" does not equal "${flags.equals}"`)
-      }
-      this.log(`✓ Assertion passed: Element text equals "${flags.equals}"`)
-    } else if (flags.matches) {
-      const regex = new RegExp(flags.matches)
-      if (!regex.test(content)) {
-        throw new Error(`Element text "${content}" does not match pattern "${flags.matches}"`)
-      }
-      this.log(`✓ Assertion passed: Element text matches pattern "${flags.matches}"`)
-    } else {
-      // Just check element exists
-      this.log(`✓ Assertion passed: Element exists: ${selector}`)
-    }
+    this.assertContent(content, flags, `Element text`)
   }
 
   private async assertEvaluation(page: Page, flags: any): Promise<void> {
     let result: any
     
-    try {
-      result = await page.evaluate(flags.eval)
-    } catch (error: any) {
-      throw new Error(`Failed to evaluate expression: ${error.message}`)
-    }
+    result = await safeEvaluate(page, flags.eval)
     
     // Convert result to string for comparison if needed
     const resultStr = typeof result === 'string' ? result : JSON.stringify(result)
     
+    this.assertContent(resultStr, flags, `Evaluation result`, result)
+  }
+
+  private async assertStoredValue(flags: any): Promise<void> {
+    const value = Store.getStoredValue(flags.stored)
+    
+    if (value === undefined) {
+      throw new Error(`No stored value found for: ${flags.stored}`)
+    }
+    
+    const valueStr = typeof value === 'string' ? value : JSON.stringify(value)
+    
+    this.assertContent(valueStr, flags, `Stored value "${flags.stored}"`, value)
+  }
+
+  private assertContent(content: string, flags: any, prefix: string, rawValue?: any): void {
     if (flags.contains) {
-      if (!resultStr.includes(flags.contains)) {
-        throw new Error(`Result "${resultStr}" does not contain "${flags.contains}"`)
+      if (!content.includes(flags.contains)) {
+        throw new Error(`${prefix} "${content}" does not contain "${flags.contains}"`)
       }
-      this.log(`✓ Assertion passed: Evaluation result contains "${flags.contains}"`)
+      this.log(`✅ Assertion passed: ${prefix} contains "${flags.contains}"`)
     } else if (flags.equals) {
+      // For equals, also check raw value if available
       const expectedStr = flags.equals
-      if (resultStr !== expectedStr && result !== flags.equals) {
-        throw new Error(`Result "${resultStr}" does not equal "${expectedStr}"`)
+      if (content !== expectedStr && rawValue !== flags.equals) {
+        // Try numeric comparison if both can be parsed as numbers
+        const numContent = parseFloat(content)
+        const numExpected = parseFloat(expectedStr)
+        if (isNaN(numContent) || isNaN(numExpected) || numContent !== numExpected) {
+          throw new Error(`${prefix} "${content}" does not equal "${expectedStr}"`)
+        }
       }
-      this.log(`✓ Assertion passed: Evaluation result equals "${flags.equals}"`)
+      this.log(`✅ Assertion passed: ${prefix} equals "${flags.equals}"`)
     } else if (flags.matches) {
       const regex = new RegExp(flags.matches)
-      if (!regex.test(resultStr)) {
-        throw new Error(`Result "${resultStr}" does not match pattern "${flags.matches}"`)
+      if (!regex.test(content)) {
+        throw new Error(`${prefix} "${content}" does not match pattern "${flags.matches}"`)
       }
-      this.log(`✓ Assertion passed: Evaluation result matches pattern "${flags.matches}"`)
+      this.log(`✅ Assertion passed: ${prefix} matches pattern "${flags.matches}"`)
+    } else if (flags['greater-than']) {
+      const numContent = parseFloat(content)
+      const numThreshold = parseFloat(flags['greater-than'])
+      if (isNaN(numContent) || isNaN(numThreshold)) {
+        throw new Error(`Cannot compare non-numeric values: "${content}" > "${flags['greater-than']}"`)
+      }
+      if (numContent <= numThreshold) {
+        throw new Error(`${prefix} ${numContent} is not greater than ${numThreshold}`)
+      }
+      this.log(`✅ Assertion passed: ${prefix} (${numContent}) is greater than ${numThreshold}`)
+    } else if (flags['less-than']) {
+      const numContent = parseFloat(content)
+      const numThreshold = parseFloat(flags['less-than'])
+      if (isNaN(numContent) || isNaN(numThreshold)) {
+        throw new Error(`Cannot compare non-numeric values: "${content}" < "${flags['less-than']}"`)
+      }
+      if (numContent >= numThreshold) {
+        throw new Error(`${prefix} ${numContent} is not less than ${numThreshold}`)
+      }
+      this.log(`✅ Assertion passed: ${prefix} (${numContent}) is less than ${numThreshold}`)
     } else {
       // For boolean expressions without comparison
-      if (result === false || result === null || result === undefined) {
-        throw new Error(`Expression evaluated to ${result}`)
+      if (rawValue === false || rawValue === null || rawValue === undefined) {
+        throw new Error(`Expression evaluated to ${rawValue}`)
       }
-      this.log(`✓ Assertion passed: Expression evaluated to ${result}`)
+      this.log(`✅ Assertion passed: ${prefix} exists${rawValue !== undefined ? ` (${content})` : ''}`)
+    }
+    
+    // Log details if verbose
+    if (flags.verbose) {
+      this.logVerbose('Assertion details', {
+        type: prefix,
+        content: content,
+        rawValue: rawValue,
+        assertion: flags.contains ? 'contains' : 
+                   flags.equals ? 'equals' : 
+                   flags.matches ? 'matches' :
+                   flags['greater-than'] ? 'greater-than' :
+                   flags['less-than'] ? 'less-than' : 'exists'
+      })
     }
   }
 }

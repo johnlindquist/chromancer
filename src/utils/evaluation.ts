@@ -1,4 +1,4 @@
-import { Page, ElementHandle } from 'puppeteer-core'
+import { Page, ElementHandle } from 'playwright'
 
 /**
  * Safely evaluate JavaScript in the page context with error handling
@@ -22,20 +22,18 @@ export async function safeEvaluate<T = any>(
  * Get a single property from an element
  */
 export async function evaluateElementProperty(
-  page: Page,
   element: ElementHandle,
   property: string
 ): Promise<any> {
-  return page.evaluate((el, prop) => {
+  return element.evaluate((el, prop) => {
     return (el as any)[prop]
-  }, element, property)
+  }, property)
 }
 
 /**
  * Get multiple properties from an element at once
  */
 export async function evaluateElementProperties(
-  page: Page,
   element: ElementHandle,
   properties?: string[]
 ): Promise<Record<string, any>> {
@@ -50,7 +48,7 @@ export async function evaluateElementProperties(
   
   const props = properties || defaultProperties
   
-  return page.evaluate((el, propList) => {
+  return element.evaluate((el, propList) => {
     const result: Record<string, any> = {}
     
     for (const prop of propList) {
@@ -58,5 +56,5 @@ export async function evaluateElementProperties(
     }
     
     return result
-  }, element, props)
+  }, props)
 }
