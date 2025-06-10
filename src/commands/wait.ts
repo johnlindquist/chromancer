@@ -1,6 +1,8 @@
 import {Flags} from '@oclif/core'
 import {Page} from 'puppeteer-core'
 import {BaseCommand} from '../base.js'
+import {waitForElement} from '../utils/selectors.js'
+import {handleCommandError, isTimeoutError} from '../utils/errors.js'
 
 export default class Wait extends BaseCommand {
   static description = 'Wait for elements or conditions before proceeding'
@@ -67,21 +69,27 @@ export default class Wait extends BaseCommand {
     // Wait for selector
     if (flags.selector) {
       if (flags.visible) {
-        waitPromises.push(page.waitForSelector(flags.selector, {
-          visible: true,
-          timeout: flags.timeout,
-        }))
+        waitPromises.push(
+          waitForElement(page, flags.selector, { 
+            visible: true, 
+            timeout: flags.timeout 
+          })
+        )
         waitDescriptions.push(`element "${flags.selector}" to be visible`)
       } else if (flags.hidden) {
-        waitPromises.push(page.waitForSelector(flags.selector, {
-          hidden: true,
-          timeout: flags.timeout,
-        }))
+        waitPromises.push(
+          waitForElement(page, flags.selector, { 
+            hidden: true, 
+            timeout: flags.timeout 
+          })
+        )
         waitDescriptions.push(`element "${flags.selector}" to be hidden`)
       } else {
-        waitPromises.push(page.waitForSelector(flags.selector, {
-          timeout: flags.timeout,
-        }))
+        waitPromises.push(
+          waitForElement(page, flags.selector, { 
+            timeout: flags.timeout 
+          })
+        )
         waitDescriptions.push(`element "${flags.selector}"`)
       }
     }
@@ -145,10 +153,11 @@ export default class Wait extends BaseCommand {
         this.log(`All conditions met: ${waitDescriptions.join(', ')}`)
       }
     } catch (error: any) {
-      if (error.name === 'TimeoutError') {
+      if (isTimeoutError(error)) {
         this.error(`Timeout waiting for ${waitDescriptions.join(', ')}`)
       }
-      throw error
+      const commandError = handleCommandError(error, 'wait')
+      this.error(commandError.message)
     }
   }
 }

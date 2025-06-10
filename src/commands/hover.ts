@@ -1,6 +1,8 @@
 import {Args, Flags} from '@oclif/core'
 import {Page} from 'puppeteer-core'
 import {BaseCommand} from '../base.js'
+import {waitForElement} from '../utils/selectors.js'
+import {handleCommandError} from '../utils/errors.js'
 
 export default class Hover extends BaseCommand {
   static description = 'Hover over an element to trigger hover states and tooltips'
@@ -43,18 +45,12 @@ export default class Hover extends BaseCommand {
       this.logVerbose(`Looking for element: ${selector}`)
       
       // Wait for element to be present
-      const element = await page.waitForSelector(selector, {
-        timeout: 5000,
-      })
-      
-      if (!element) {
-        this.error(`Element not found: ${selector}`)
-      }
+      const element = await waitForElement(page, selector, { timeout: 5000 })
       
       // Move mouse to element
       await element.hover()
       
-      this.log(`Hovered over element: ${selector}`)
+      this.log(`✅ Hovered over element: ${selector}`)
       
       // If duration specified, keep hovering
       if (duration > 0) {
@@ -63,10 +59,8 @@ export default class Hover extends BaseCommand {
       }
       
     } catch (error: any) {
-      if (error.name === 'TimeoutError') {
-        this.error(`Element not found: ${selector}`)
-      }
-      this.error(`Failed to hover: ${error.message}`)
+      const commandError = handleCommandError(error, 'hover', selector)
+      this.error(commandError.message)
     }
   }
 }

@@ -1,5 +1,7 @@
 import { Args, Flags } from '@oclif/core'
 import { BaseCommand } from '../base'
+import { waitForElement } from '../utils/selectors.js'
+import { handleCommandError } from '../utils/errors.js'
 
 export default class Click extends BaseCommand {
   static description = 'Click an element by CSS selector'
@@ -49,9 +51,7 @@ export default class Click extends BaseCommand {
     try {
       if (flags['wait-for-selector']) {
         this.log(`Waiting for selector: ${args.selector}`)
-        await this.page.waitForSelector(args.selector, {
-          timeout: flags.timeout,
-        })
+        await waitForElement(this.page, args.selector, { timeout: flags.timeout })
       }
 
       this.log(`Clicking on: ${args.selector}`)
@@ -59,9 +59,10 @@ export default class Click extends BaseCommand {
         clickCount: flags['click-count'],
         button: flags.button as 'left' | 'right' | 'middle',
       })
-      this.log(`Successfully clicked on: ${args.selector}`)
-    } catch (error) {
-      this.error(`Failed to click: ${error}`)
+      this.log(`✅ Successfully clicked on: ${args.selector}`)
+    } catch (error: any) {
+      const commandError = handleCommandError(error, 'click', args.selector)
+      this.error(commandError.message)
     }
   }
 }
