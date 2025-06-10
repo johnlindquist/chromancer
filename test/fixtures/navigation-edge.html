@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Navigation Edge Cases</title>
+</head>
+<body>
+    <h1>Navigation Testing</h1>
+    
+    <!-- Hash Navigation -->
+    <nav id="hash-nav">
+        <a href="#section1">Section 1</a>
+        <a href="#section2">Section 2</a>
+        <a href="#section3">Section 3</a>
+    </nav>
+    
+    <!-- JavaScript Navigation -->
+    <button onclick="window.location.href = '/form.html'">JS Navigate</button>
+    <button onclick="window.open('/buttons.html', '_blank')">Open New Window</button>
+    <button onclick="history.back()">Go Back</button>
+    <button onclick="history.forward()">Go Forward</button>
+    
+    <!-- Meta Refresh -->
+    <button id="trigger-refresh" onclick="addMetaRefresh()">Trigger Meta Refresh</button>
+    
+    <!-- Form Submission Navigation -->
+    <form action="/form.html" method="GET" id="nav-form">
+        <input type="hidden" name="source" value="navigation-edge">
+        <button type="submit">Form Navigate</button>
+    </form>
+    
+    <!-- Sections for hash navigation -->
+    <div id="section1" style="height: 500px; padding-top: 50px;">
+        <h2>Section 1</h2>
+        <p>First section content</p>
+    </div>
+    
+    <div id="section2" style="height: 500px; padding-top: 50px;">
+        <h2>Section 2</h2>
+        <p>Second section content</p>
+    </div>
+    
+    <div id="section3" style="height: 500px; padding-top: 50px;">
+        <h2>Section 3</h2>
+        <p>Third section content</p>
+    </div>
+    
+    <script>
+        // Track navigation events
+        let navHistory = [];
+        
+        window.addEventListener('hashchange', (e) => {
+            navHistory.push({
+                type: 'hashchange',
+                from: e.oldURL,
+                to: e.newURL,
+                timestamp: Date.now()
+            });
+            document.getElementById('nav-log').textContent = JSON.stringify(navHistory, null, 2);
+        });
+        
+        function addMetaRefresh() {
+            const meta = document.createElement('meta');
+            meta.httpEquiv = 'refresh';
+            meta.content = '2;url=/index.html';
+            document.head.appendChild(meta);
+            alert('Page will redirect in 2 seconds');
+        }
+    </script>
+    
+    <pre id="nav-log">[]</pre>
+</body>
+</html>

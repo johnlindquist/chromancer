@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Type Edge Cases</title>
+    <style>
+        .input-group {
+            margin: 20px 0;
+            padding: 10px;
+            background: #f5f5f5;
+        }
+        .readonly-input {
+            background: #e0e0e0;
+        }
+        .validation-error {
+            color: red;
+            font-size: 0.9em;
+        }
+        .char-counter {
+            float: right;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Type Input Edge Cases</h1>
+    
+    <!-- Readonly and Disabled Inputs -->
+    <div class="input-group">
+        <h3>Readonly/Disabled Fields</h3>
+        <input type="text" id="readonly-input" value="Can't edit me!" readonly class="readonly-input">
+        <input type="text" id="disabled-input" value="I'm disabled!" disabled>
+        <button onclick="toggleReadonly()">Toggle Readonly</button>
+    </div>
+    
+    <!-- Input with Validation -->
+    <div class="input-group">
+        <h3>Input Validation</h3>
+        <input type="email" id="email-validation" placeholder="Enter valid email" oninput="validateEmail(this)">
+        <span id="email-error" class="validation-error"></span>
+        <br><br>
+        <input type="number" id="number-input" min="0" max="100" placeholder="0-100">
+        <input type="tel" id="phone-input" pattern="[0-9]{3}-[0-9]{3}-[0-9]{4}" placeholder="123-456-7890">
+    </div>
+    
+    <!-- Character Limits -->
+    <div class="input-group">
+        <h3>Character Limits</h3>
+        <input type="text" id="maxlength-input" maxlength="10" placeholder="Max 10 chars" oninput="updateCounter(this, 'counter1')">
+        <span id="counter1" class="char-counter">0/10</span>
+        <br><br>
+        <textarea id="textarea-limit" maxlength="50" rows="3" cols="40" oninput="updateCounter(this, 'counter2')" placeholder="Max 50 chars"></textarea>
+        <span id="counter2" class="char-counter">0/50</span>
+    </div>
+    
+    <!-- Auto-formatting Inputs -->
+    <div class="input-group">
+        <h3>Auto-formatting</h3>
+        <input type="text" id="phone-format" placeholder="Phone: (123) 456-7890" oninput="formatPhone(this)">
+        <input type="text" id="credit-card" placeholder="Card: 1234 5678 9012 3456" oninput="formatCreditCard(this)">
+        <input type="text" id="uppercase-input" placeholder="Auto uppercase" oninput="this.value = this.value.toUpperCase()">
+    </div>
+    
+    <!-- Paste Events -->
+    <div class="input-group">
+        <h3>Paste Handling</h3>
+        <input type="text" id="paste-input" placeholder="Try pasting here" onpaste="handlePaste(event)">
+        <div id="paste-log"></div>
+        <input type="text" id="no-paste" placeholder="Paste disabled" onpaste="return false;">
+    </div>
+    
+    <!-- Input with Keyboard Shortcuts -->
+    <div class="input-group">
+        <h3>Keyboard Shortcuts</h3>
+        <input type="text" id="shortcut-input" placeholder="Try Ctrl+S, Ctrl+Enter" onkeydown="handleShortcut(event)">
+        <div id="shortcut-log"></div>
+    </div>
+    
+    <!-- Contenteditable -->
+    <div class="input-group">
+        <h3>ContentEditable</h3>
+        <div id="contenteditable" contenteditable="true" style="border: 1px solid #ccc; padding: 10px; min-height: 50px;">
+            This is editable content. Try typing here!
+        </div>
+        <button onclick="getEditableContent()">Get Content</button>
+        <div id="editable-output"></div>
+    </div>
+    
+    <!-- Input with Debounce -->
+    <div class="input-group">
+        <h3>Debounced Input</h3>
+        <input type="text" id="debounce-input" placeholder="Type to search..." oninput="debounceSearch(this.value)">
+        <div id="search-status">Ready</div>
+        <div id="search-results"></div>
+    </div>
+    
+    <!-- Hidden/Visible Toggle -->
+    <div class="input-group">
+        <h3>Dynamic Visibility</h3>
+        <input type="text" id="toggle-input" style="display: none;" placeholder="Initially hidden">
+        <button onclick="toggleVisibility()">Toggle Input Visibility</button>
+    </div>
+    
+    <!-- Input with Focus/Blur Events -->
+    <div class="input-group">
+        <h3>Focus Events</h3>
+        <input type="text" id="focus-input" 
+               placeholder="Focus/blur events" 
+               onfocus="logEvent('focus')" 
+               onblur="logEvent('blur')"
+               onchange="logEvent('change')">
+        <div id="event-log"></div>
+    </div>
+    
+    <!-- Input in iframe -->
+    <div class="input-group">
+        <h3>iFrame Input</h3>
+        <iframe id="input-iframe" srcdoc="<input type='text' id='iframe-input' placeholder='Input in iframe'>" style="width: 300px; height: 60px; border: 1px solid #ccc;"></iframe>
+    </div>
+    
+    <script>
+        function toggleReadonly() {
+            const input = document.getElementById('readonly-input');
+            input.readOnly = !input.readOnly;
+        }
+        
+        function validateEmail(input) {
+            const error = document.getElementById('email-error');
+            const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value);
+            error.textContent = input.value && !valid ? 'Invalid email format' : '';
+        }
+        
+        function updateCounter(input, counterId) {
+            const counter = document.getElementById(counterId);
+            counter.textContent = `${input.value.length}/${input.maxLength}`;
+        }
+        
+        function formatPhone(input) {
+            let value = input.value.replace(/\D/g, '');
+            if (value.length >= 6) {
+                value = `(${value.slice(0,3)}) ${value.slice(3,6)}-${value.slice(6,10)}`;
+            } else if (value.length >= 3) {
+                value = `(${value.slice(0,3)}) ${value.slice(3)}`;
+            }
+            input.value = value;
+        }
+        
+        function formatCreditCard(input) {
+            let value = input.value.replace(/\s/g, '');
+            let formatted = value.match(/.{1,4}/g)?.join(' ') || value;
+            input.value = formatted;
+        }
+        
+        function handlePaste(e) {
+            e.preventDefault();
+            const pastedText = e.clipboardData.getData('text');
+            document.getElementById('paste-log').innerHTML = `Pasted: "${pastedText}" at ${new Date().toLocaleTimeString()}`;
+            e.target.value = pastedText.toUpperCase(); // Transform pasted text
+        }
+        
+        function handleShortcut(e) {
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === 's') {
+                    e.preventDefault();
+                    document.getElementById('shortcut-log').innerHTML += '<div>Ctrl+S pressed - Save triggered</div>';
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.getElementById('shortcut-log').innerHTML += '<div>Ctrl+Enter pressed - Submit triggered</div>';
+                }
+            }
+        }
+        
+        function getEditableContent() {
+            const content = document.getElementById('contenteditable').innerHTML;
+            document.getElementById('editable-output').textContent = `Content: ${content}`;
+        }
+        
+        let debounceTimer;
+        function debounceSearch(value) {
+            document.getElementById('search-status').textContent = 'Typing...';
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                document.getElementById('search-status').textContent = 'Searching...';
+                setTimeout(() => {
+                    document.getElementById('search-results').innerHTML = `Results for "${value}"`;
+                    document.getElementById('search-status').textContent = 'Ready';
+                }, 500);
+            }, 300);
+        }
+        
+        function toggleVisibility() {
+            const input = document.getElementById('toggle-input');
+            input.style.display = input.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        function logEvent(eventType) {
+            const log = document.getElementById('event-log');
+            log.innerHTML = `<div>${eventType} at ${new Date().toLocaleTimeString()}</div>` + log.innerHTML;
+        }
+    </script>
+</body>
+</html>

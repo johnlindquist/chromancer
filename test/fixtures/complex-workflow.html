@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complex Workflow Testing</title>
+    <style>
+        .wizard-step {
+            display: none;
+            padding: 20px;
+            border: 1px solid #ddd;
+            margin: 20px 0;
+        }
+        .wizard-step.active {
+            display: block;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #f0f0f0;
+            margin-bottom: 20px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #4CAF50;
+            transition: width 0.3s;
+        }
+        .error-message {
+            color: red;
+            display: none;
+        }
+        .saved-data {
+            background: #e8f5e9;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .search-results {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            display: none;
+        }
+        .search-result-item {
+            padding: 10px;
+            cursor: pointer;
+        }
+        .search-result-item:hover {
+            background: #f0f0f0;
+        }
+        .shopping-item {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 5px 0;
+        }
+        .cart-summary {
+            background: #fff3cd;
+            padding: 15px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Complex E-Commerce Workflow</h1>
+    
+    <div class="progress-bar">
+        <div class="progress-fill" id="progress" style="width: 20%"></div>
+    </div>
+    
+    <!-- Step 1: Search and Select Product -->
+    <div class="wizard-step active" id="step1">
+        <h2>Step 1: Search for Product</h2>
+        <input type="text" id="search-input" placeholder="Search products..." oninput="searchProducts(this.value)">
+        <div id="search-results" class="search-results"></div>
+        <div id="selected-product" class="saved-data" style="display: none;">
+            Selected: <span id="product-name"></span>
+        </div>
+        <button onclick="nextStep()" id="step1-next" disabled>Next</button>
+    </div>
+    
+    <!-- Step 2: Configure Product -->
+    <div class="wizard-step" id="step2">
+        <h2>Step 2: Configure Your Product</h2>
+        <div id="product-config">
+            <label>
+                Size:
+                <select id="size-select" onchange="updatePrice()">
+                    <option value="">Choose size</option>
+                    <option value="small" data-price="10">Small ($10)</option>
+                    <option value="medium" data-price="15">Medium ($15)</option>
+                    <option value="large" data-price="20">Large ($20)</option>
+                </select>
+            </label>
+            <br><br>
+            <label>
+                Color:
+                <select id="color-select">
+                    <option value="">Choose color</option>
+                    <option value="red">Red</option>
+                    <option value="blue">Blue</option>
+                    <option value="green">Green</option>
+                </select>
+            </label>
+            <br><br>
+            <label>
+                Quantity:
+                <input type="number" id="quantity" value="1" min="1" max="10" onchange="updatePrice()">
+            </label>
+            <br><br>
+            <div>Total Price: $<span id="total-price">0</span></div>
+        </div>
+        <button onclick="previousStep()">Previous</button>
+        <button onclick="nextStep()" id="step2-next" disabled>Next</button>
+        <div class="error-message" id="config-error">Please complete all configuration options</div>
+    </div>
+    
+    <!-- Step 3: Customer Information -->
+    <div class="wizard-step" id="step3">
+        <h2>Step 3: Your Information</h2>
+        <form id="customer-form">
+            <label>
+                Full Name:
+                <input type="text" id="customer-name" required>
+            </label>
+            <br><br>
+            <label>
+                Email:
+                <input type="email" id="customer-email" required>
+            </label>
+            <br><br>
+            <label>
+                Phone:
+                <input type="tel" id="customer-phone" pattern="[0-9]{3}-[0-9]{3}-[0-9]{4}" placeholder="123-456-7890">
+            </label>
+            <br><br>
+            <label>
+                Shipping Address:
+                <textarea id="shipping-address" rows="3" required></textarea>
+            </label>
+            <br><br>
+            <label>
+                <input type="checkbox" id="save-info" checked>
+                Save my information for next time
+            </label>
+        </form>
+        <button onclick="previousStep()">Previous</button>
+        <button onclick="validateAndNext()" id="step3-next">Next</button>
+        <div class="error-message" id="form-error">Please fill in all required fields</div>
+    </div>
+    
+    <!-- Step 4: Review and Confirm -->
+    <div class="wizard-step" id="step4">
+        <h2>Step 4: Review Your Order</h2>
+        <div class="cart-summary" id="order-summary">
+            <!-- Order details will be populated here -->
+        </div>
+        <label>
+            <input type="checkbox" id="terms-agree">
+            I agree to the terms and conditions
+        </label>
+        <br><br>
+        <button onclick="previousStep()">Previous</button>
+        <button onclick="placeOrder()" id="place-order" disabled>Place Order</button>
+        <div class="error-message" id="terms-error">Please agree to terms and conditions</div>
+    </div>
+    
+    <!-- Step 5: Confirmation -->
+    <div class="wizard-step" id="step5">
+        <h2>Order Confirmed!</h2>
+        <div class="saved-data">
+            <h3>Thank you for your order!</h3>
+            <p>Order ID: <span id="order-id"></span></p>
+            <p>Confirmation email sent to: <span id="confirm-email"></span></p>
+        </div>
+        <button onclick="startOver()">Place Another Order</button>
+    </div>
+    
+    <!-- Hidden state management -->
+    <div id="state-tracker" style="display: none;" 
+         data-current-step="1" 
+         data-product="" 
+         data-config=""
+         data-customer="">
+    </div>
+    
+    <script>
+        const products = [
+            { id: 1, name: 'Laptop Case', basePrice: 25 },
+            { id: 2, name: 'Wireless Mouse', basePrice: 30 },
+            { id: 3, name: 'USB Hub', basePrice: 20 },
+            { id: 4, name: 'Laptop Stand', basePrice: 35 },
+            { id: 5, name: 'Cable Organizer', basePrice: 15 }
+        ];
+        
+        let currentStep = 1;
+        let orderData = {
+            product: null,
+            configuration: {},
+            customer: {},
+            totalPrice: 0
+        };
+        
+        function searchProducts(query) {
+            const resultsDiv = document.getElementById('search-results');
+            if (query.length < 2) {
+                resultsDiv.style.display = 'none';
+                return;
+            }
+            
+            const filtered = products.filter(p => 
+                p.name.toLowerCase().includes(query.toLowerCase())
+            );
+            
+            resultsDiv.innerHTML = filtered.map(p => 
+                `<div class="search-result-item" onclick="selectProduct(${p.id})">${p.name} - $${p.basePrice}</div>`
+            ).join('');
+            
+            resultsDiv.style.display = filtered.length > 0 ? 'block' : 'none';
+        }
+        
+        function selectProduct(productId) {
+            const product = products.find(p => p.id === productId);
+            orderData.product = product;
+            
+            document.getElementById('search-results').style.display = 'none';
+            document.getElementById('selected-product').style.display = 'block';
+            document.getElementById('product-name').textContent = product.name;
+            document.getElementById('step1-next').disabled = false;
+            
+            // Update state tracker
+            document.getElementById('state-tracker').dataset.product = JSON.stringify(product);
+        }
+        
+        function updatePrice() {
+            const size = document.getElementById('size-select').value;
+            const quantity = parseInt(document.getElementById('quantity').value) || 1;
+            
+            if (size && orderData.product) {
+                const sizePrice = parseInt(document.querySelector(`#size-select option[value="${size}"]`).dataset.price);
+                const total = (orderData.product.basePrice + sizePrice) * quantity;
+                orderData.totalPrice = total;
+                document.getElementById('total-price').textContent = total;
+            }
+            
+            checkConfigComplete();
+        }
+        
+        function checkConfigComplete() {
+            const size = document.getElementById('size-select').value;
+            const color = document.getElementById('color-select').value;
+            const complete = size && color;
+            
+            document.getElementById('step2-next').disabled = !complete;
+            document.getElementById('config-error').style.display = complete ? 'none' : 'block';
+        }
+        
+        function validateAndNext() {
+            const form = document.getElementById('customer-form');
+            if (form.checkValidity()) {
+                orderData.customer = {
+                    name: document.getElementById('customer-name').value,
+                    email: document.getElementById('customer-email').value,
+                    phone: document.getElementById('customer-phone').value,
+                    address: document.getElementById('shipping-address').value,
+                    saveInfo: document.getElementById('save-info').checked
+                };
+                nextStep();
+            } else {
+                document.getElementById('form-error').style.display = 'block';
+            }
+        }
+        
+        function nextStep() {
+            if (currentStep === 2) {
+                orderData.configuration = {
+                    size: document.getElementById('size-select').value,
+                    color: document.getElementById('color-select').value,
+                    quantity: document.getElementById('quantity').value
+                };
+            }
+            
+            if (currentStep === 3) {
+                // Populate order summary
+                const summary = document.getElementById('order-summary');
+                summary.innerHTML = `
+                    <h3>Order Details</h3>
+                    <p><strong>Product:</strong> ${orderData.product.name}</p>
+                    <p><strong>Configuration:</strong> ${orderData.configuration.size}, ${orderData.configuration.color}</p>
+                    <p><strong>Quantity:</strong> ${orderData.configuration.quantity}</p>
+                    <p><strong>Total Price:</strong> $${orderData.totalPrice}</p>
+                    <hr>
+                    <p><strong>Ship to:</strong><br>
+                    ${orderData.customer.name}<br>
+                    ${orderData.customer.address}<br>
+                    ${orderData.customer.email}<br>
+                    ${orderData.customer.phone}</p>
+                `;
+            }
+            
+            document.getElementById(`step${currentStep}`).classList.remove('active');
+            currentStep++;
+            document.getElementById(`step${currentStep}`).classList.add('active');
+            updateProgress();
+        }
+        
+        function previousStep() {
+            document.getElementById(`step${currentStep}`).classList.remove('active');
+            currentStep--;
+            document.getElementById(`step${currentStep}`).classList.add('active');
+            updateProgress();
+        }
+        
+        function updateProgress() {
+            const progress = (currentStep / 5) * 100;
+            document.getElementById('progress').style.width = progress + '%';
+            document.getElementById('state-tracker').dataset.currentStep = currentStep;
+        }
+        
+        function placeOrder() {
+            const orderId = 'ORD-' + Date.now();
+            document.getElementById('order-id').textContent = orderId;
+            document.getElementById('confirm-email').textContent = orderData.customer.email;
+            nextStep();
+        }
+        
+        function startOver() {
+            currentStep = 1;
+            orderData = {
+                product: null,
+                configuration: {},
+                customer: {},
+                totalPrice: 0
+            };
+            
+            // Reset all steps
+            document.querySelectorAll('.wizard-step').forEach(step => {
+                step.classList.remove('active');
+            });
+            document.getElementById('step1').classList.add('active');
+            
+            // Reset form
+            document.getElementById('search-input').value = '';
+            document.getElementById('selected-product').style.display = 'none';
+            document.getElementById('step1-next').disabled = true;
+            
+            updateProgress();
+        }
+        
+        // Terms checkbox handler
+        document.getElementById('terms-agree').addEventListener('change', (e) => {
+            document.getElementById('place-order').disabled = !e.target.checked;
+            document.getElementById('terms-error').style.display = e.target.checked ? 'none' : 'block';
+        });
+        
+        // Save form state on input
+        document.querySelectorAll('input, select, textarea').forEach(element => {
+            element.addEventListener('change', () => {
+                const state = {
+                    step: currentStep,
+                    data: orderData,
+                    timestamp: Date.now()
+                };
+                sessionStorage.setItem('workflow-state', JSON.stringify(state));
+            });
+        });
+    </script>
+</body>
+</html>

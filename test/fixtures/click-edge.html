@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Click Edge Cases</title>
+    <style>
+        .hover-target {
+            padding: 20px;
+            background: #f0f0f0;
+            transition: all 0.3s;
+        }
+        .hover-target:hover {
+            background: #007bff;
+            color: white;
+        }
+        .drag-item {
+            padding: 10px;
+            margin: 5px;
+            background: #e0e0e0;
+            cursor: move;
+        }
+        .drop-zone {
+            min-height: 100px;
+            border: 2px dashed #ccc;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .drop-zone.dragover {
+            background: #f0f8ff;
+        }
+        .context-menu {
+            display: none;
+            position: absolute;
+            background: white;
+            border: 1px solid #ccc;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+        .nested-clickable {
+            padding: 20px;
+            background: #ffe0e0;
+        }
+        .nested-clickable > div {
+            padding: 20px;
+            background: #e0ffe0;
+        }
+        .nested-clickable > div > button {
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Click Edge Cases Testing</h1>
+    
+    <!-- Double Click -->
+    <div id="double-click-area" ondblclick="handleDoubleClick()" style="padding: 20px; background: #f0f0f0;">
+        Double-click me! (Count: <span id="dbl-count">0</span>)
+    </div>
+    
+    <!-- Right Click / Context Menu -->
+    <div id="right-click-area" oncontextmenu="handleRightClick(event)" style="padding: 20px; background: #e0f0e0; margin: 10px 0;">
+        Right-click for context menu
+    </div>
+    <div id="custom-context-menu" class="context-menu">
+        <div onclick="contextAction('copy')">Copy</div>
+        <div onclick="contextAction('paste')">Paste</div>
+        <div onclick="contextAction('delete')">Delete</div>
+    </div>
+    
+    <!-- Hover States -->
+    <div class="hover-target" id="hover-div">
+        Hover over me to change color
+        <span id="hover-state">Not hovered</span>
+    </div>
+    
+    <!-- Click and Hold -->
+    <button id="hold-button" 
+            onmousedown="startHold()" 
+            onmouseup="endHold()" 
+            onmouseleave="endHold()">
+        Click and Hold (Hold time: <span id="hold-time">0</span>ms)
+    </button>
+    
+    <!-- Nested Clickable Elements -->
+    <div class="nested-clickable" onclick="logClick('outer')">
+        Outer clickable div
+        <div onclick="logClick('middle')">
+            Middle clickable div
+            <button onclick="logClick('inner')">Inner button</button>
+        </div>
+    </div>
+    <div id="click-log"></div>
+    
+    <!-- Click on Moving Element -->
+    <button id="moving-button" onclick="clickMoving()">Click me while I move!</button>
+    
+    <!-- Drag and Drop -->
+    <div id="drag-container">
+        <div class="drag-item" draggable="true" ondragstart="drag(event)" id="drag1">Drag Item 1</div>
+        <div class="drag-item" draggable="true" ondragstart="drag(event)" id="drag2">Drag Item 2</div>
+    </div>
+    <div class="drop-zone" ondrop="drop(event)" ondragover="allowDrop(event)" ondragenter="dragEnter(event)" ondragleave="dragLeave(event)">
+        Drop Zone
+    </div>
+    
+    <!-- Click Coordinates -->
+    <div id="coordinate-click" onclick="showCoordinates(event)" style="width: 300px; height: 200px; background: #f0f0f0; position: relative;">
+        Click anywhere in this box
+        <div id="coord-display" style="position: absolute; bottom: 10px; right: 10px;"></div>
+    </div>
+    
+    <!-- Disabled/Enabled Toggle -->
+    <button id="toggle-target" onclick="alert('Clicked!')">Target Button</button>
+    <button onclick="toggleDisabled()">Toggle Disabled State</button>
+    
+    <!-- Rapid Clicks -->
+    <button id="rapid-click" onclick="handleRapidClick()">
+        Rapid Click Test (Count: <span id="rapid-count">0</span>)
+    </button>
+    
+    <script>
+        let dblClickCount = 0;
+        let holdStartTime = null;
+        let holdInterval = null;
+        let rapidClickCount = 0;
+        let lastRapidClick = 0;
+        let movingInterval = null;
+        
+        function handleDoubleClick() {
+            dblClickCount++;
+            document.getElementById('dbl-count').textContent = dblClickCount;
+        }
+        
+        function handleRightClick(e) {
+            e.preventDefault();
+            const menu = document.getElementById('custom-context-menu');
+            menu.style.display = 'block';
+            menu.style.left = e.pageX + 'px';
+            menu.style.top = e.pageY + 'px';
+            
+            document.addEventListener('click', () => {
+                menu.style.display = 'none';
+            }, { once: true });
+        }
+        
+        function contextAction(action) {
+            alert(`Context action: ${action}`);
+        }
+        
+        function startHold() {
+            holdStartTime = Date.now();
+            holdInterval = setInterval(() => {
+                const elapsed = Date.now() - holdStartTime;
+                document.getElementById('hold-time').textContent = elapsed;
+            }, 50);
+        }
+        
+        function endHold() {
+            if (holdInterval) {
+                clearInterval(holdInterval);
+                holdInterval = null;
+                const totalTime = holdStartTime ? Date.now() - holdStartTime : 0;
+                if (totalTime > 1000) {
+                    alert(`Held for ${totalTime}ms!`);
+                }
+            }
+        }
+        
+        function logClick(level) {
+            event.stopPropagation();
+            const log = document.getElementById('click-log');
+            log.innerHTML += `<div>Clicked: ${level} at ${new Date().toLocaleTimeString()}</div>`;
+        }
+        
+        function clickMoving() {
+            alert('You caught the moving button!');
+        }
+        
+        // Make button move
+        let position = 0;
+        setInterval(() => {
+            const btn = document.getElementById('moving-button');
+            position = (position + 5) % 200;
+            btn.style.marginLeft = position + 'px';
+        }, 100);
+        
+        // Drag and drop
+        function drag(ev) {
+            ev.dataTransfer.setData("text", ev.target.id);
+        }
+        
+        function allowDrop(ev) {
+            ev.preventDefault();
+        }
+        
+        function dragEnter(ev) {
+            ev.target.classList.add('dragover');
+        }
+        
+        function dragLeave(ev) {
+            ev.target.classList.remove('dragover');
+        }
+        
+        function drop(ev) {
+            ev.preventDefault();
+            ev.target.classList.remove('dragover');
+            const data = ev.dataTransfer.getData("text");
+            ev.target.appendChild(document.getElementById(data));
+        }
+        
+        function showCoordinates(e) {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = Math.round(e.clientX - rect.left);
+            const y = Math.round(e.clientY - rect.top);
+            document.getElementById('coord-display').textContent = `Clicked at: ${x}, ${y}`;
+        }
+        
+        function toggleDisabled() {
+            const target = document.getElementById('toggle-target');
+            target.disabled = !target.disabled;
+        }
+        
+        function handleRapidClick() {
+            const now = Date.now();
+            if (now - lastRapidClick < 500) {
+                rapidClickCount++;
+            } else {
+                rapidClickCount = 1;
+            }
+            lastRapidClick = now;
+            document.getElementById('rapid-count').textContent = rapidClickCount;
+        }
+        
+        // Hover detection
+        document.getElementById('hover-div').addEventListener('mouseenter', () => {
+            document.getElementById('hover-state').textContent = 'Hovered!';
+        });
+        
+        document.getElementById('hover-div').addEventListener('mouseleave', () => {
+            document.getElementById('hover-state').textContent = 'Not hovered';
+        });
+    </script>
+</body>
+</html>
