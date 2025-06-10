@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Form Test Page</title>
+</head>
+<body>
+    <h1>Form Testing</h1>
+    <form id="test-form">
+        <div>
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" placeholder="Enter username">
+        </div>
+        <div>
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" placeholder="test@example.com">
+        </div>
+        <div>
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password">
+        </div>
+        <div>
+            <label for="message">Message:</label>
+            <textarea id="message" name="message" rows="4" cols="50"></textarea>
+        </div>
+        <div>
+            <label>
+                <input type="checkbox" id="agree" name="agree" value="yes">
+                I agree to terms
+            </label>
+        </div>
+        <div>
+            <label>
+                <input type="radio" name="plan" value="basic" checked>
+                Basic Plan
+            </label>
+            <label>
+                <input type="radio" name="plan" value="premium">
+                Premium Plan
+            </label>
+        </div>
+        <button type="submit" id="submit-btn">Submit Form</button>
+    </form>
+    <div id="form-result" style="display: none;">
+        <h2>Form Submitted!</h2>
+        <p id="result-text"></p>
+    </div>
+    <script>
+        document.getElementById('test-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const result = [];
+            for (let [key, value] of formData.entries()) {
+                result.push(`${key}: ${value}`);
+            }
+            document.getElementById('result-text').textContent = result.join(', ');
+            document.getElementById('form-result').style.display = 'block';
+        });
+    </script>
+</body>
+</html>

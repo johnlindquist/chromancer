@@ -11,6 +11,10 @@
     "clean": "rm -rf dist",
     "prepack": "npm run clean && npm run build",
     "test": "node test/unit-tests.js",
+    "test:vitest": "vitest",
+    "test:vitest:ui": "vitest --ui",
+    "test:vitest:run": "vitest run",
+    "test:server": "node test/test-server.js",
     "prepublishOnly": "npm run clean && npm run build && npm test"
   },
   "keywords": [
@@ -62,5 +66,11 @@
     "/bin",
     "/dist",
     "/oclif.manifest.json"
-  ]
+  ],
+  "devDependencies": {
+    "@vitest/ui": "^3.2.3",
+    "express": "^5.1.0",
+    "serve-static": "^2.2.0",
+    "vitest": "^3.2.3"
+  }
 }

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Elements Test</title>
+</head>
+<body>
+    <h1>Select & Option Testing</h1>
+    
+    <div class="select-group">
+        <label for="single-select">Single Select:</label>
+        <select id="single-select" name="country">
+            <option value="">Choose a country</option>
+            <option value="us">United States</option>
+            <option value="uk">United Kingdom</option>
+            <option value="ca">Canada</option>
+            <option value="au">Australia</option>
+        </select>
+    </div>
+    
+    <div class="select-group">
+        <label for="multi-select">Multi Select:</label>
+        <select id="multi-select" name="languages" multiple size="5">
+            <option value="js">JavaScript</option>
+            <option value="py">Python</option>
+            <option value="java">Java</option>
+            <option value="go">Go</option>
+            <option value="rust">Rust</option>
+        </select>
+    </div>
+    
+    <div class="select-group">
+        <label for="grouped-select">Grouped Options:</label>
+        <select id="grouped-select" name="vehicle">
+            <optgroup label="Cars">
+                <option value="sedan">Sedan</option>
+                <option value="suv">SUV</option>
+                <option value="truck">Truck</option>
+            </optgroup>
+            <optgroup label="Motorcycles">
+                <option value="sport">Sport Bike</option>
+                <option value="cruiser">Cruiser</option>
+                <option value="touring">Touring</option>
+            </optgroup>
+        </select>
+    </div>
+    
+    <div id="selection-display">
+        <h3>Current Selections:</h3>
+        <p id="single-result">Single: None</p>
+        <p id="multi-result">Multiple: None</p>
+        <p id="grouped-result">Grouped: None</p>
+    </div>
+    
+    <script>
+        document.getElementById('single-select').addEventListener('change', (e) => {
+            const selected = e.target.options[e.target.selectedIndex];
+            document.getElementById('single-result').textContent = 
+                `Single: ${selected.text} (${selected.value})`;
+        });
+        
+        document.getElementById('multi-select').addEventListener('change', (e) => {
+            const selected = Array.from(e.target.selectedOptions)
+                .map(opt => `${opt.text} (${opt.value})`)
+                .join(', ');
+            document.getElementById('multi-result').textContent = 
+                `Multiple: ${selected || 'None'}`;
+        });
+        
+        document.getElementById('grouped-select').addEventListener('change', (e) => {
+            const selected = e.target.options[e.target.selectedIndex];
+            document.getElementById('grouped-result').textContent = 
+                `Grouped: ${selected.text} (${selected.value})`;
+        });
+    </script>
+</body>
+</html>

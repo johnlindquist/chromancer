@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Button Test Page</title>
+</head>
+<body>
+    <h1>Button Click Testing</h1>
+    <div id="click-counter">
+        <p>Click count: <span id="count">0</span></p>
+    </div>
+    <div id="button-container">
+        <button id="simple-btn" class="test-button">Simple Button</button>
+        <button id="counter-btn" class="test-button">Increment Counter</button>
+        <button id="alert-btn" class="test-button">Show Alert</button>
+        <button id="toggle-btn" class="test-button">Toggle Content</button>
+        <button id="delayed-btn" class="test-button">Delayed Action</button>
+        <button disabled id="disabled-btn">Disabled Button</button>
+    </div>
+    <div id="toggle-content" style="display: none;">
+        <p>This content is toggled!</p>
+    </div>
+    <div id="action-log">
+        <h3>Action Log:</h3>
+        <ul id="log-list"></ul>
+    </div>
+    <script>
+        let clickCount = 0;
+        const logAction = (action) => {
+            const li = document.createElement('li');
+            li.textContent = `${new Date().toLocaleTimeString()}: ${action}`;
+            document.getElementById('log-list').appendChild(li);
+        };
+
+        document.getElementById('simple-btn').addEventListener('click', () => {
+            logAction('Simple button clicked');
+        });
+
+        document.getElementById('counter-btn').addEventListener('click', () => {
+            clickCount++;
+            document.getElementById('count').textContent = clickCount;
+            logAction(`Counter incremented to ${clickCount}`);
+        });
+
+        document.getElementById('alert-btn').addEventListener('click', () => {
+            alert('Alert button clicked!');
+            logAction('Alert shown');
+        });
+
+        document.getElementById('toggle-btn').addEventListener('click', () => {
+            const content = document.getElementById('toggle-content');
+            content.style.display = content.style.display === 'none' ? 'block' : 'none';
+            logAction('Content toggled');
+        });
+
+        document.getElementById('delayed-btn').addEventListener('click', () => {
+            logAction('Delayed action started...');
+            setTimeout(() => {
+                logAction('Delayed action completed!');
+            }, 2000);
+        });
+    </script>
+</body>
+</html>

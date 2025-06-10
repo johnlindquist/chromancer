@@ -25,6 +25,12 @@ node test/regression-tests.js
 # Full test suite (requires Chrome running)
 node test/test-suite.js
 
+# Vitest integration tests (comprehensive)
+npm run test:vitest:run
+
+# Run all tests with Chrome auto-start
+./run-chromancer-tests.sh
+
 # Complete verification
 ./verify-all.sh
 ```

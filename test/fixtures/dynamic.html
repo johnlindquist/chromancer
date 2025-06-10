@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Content Test</title>
+</head>
+<body>
+    <h1>Dynamic Content Testing</h1>
+    <button id="load-content">Load Dynamic Content</button>
+    <button id="add-item">Add List Item</button>
+    <button id="start-timer">Start Timer</button>
+    <button id="stop-timer">Stop Timer</button>
+    
+    <div id="dynamic-area">
+        <p>Initial content</p>
+    </div>
+    
+    <ul id="dynamic-list">
+        <li>Initial item</li>
+    </ul>
+    
+    <div id="timer-display">
+        <p>Timer: <span id="timer">0</span> seconds</p>
+    </div>
+    
+    <div id="ajax-content"></div>
+    
+    <script>
+        let itemCount = 1;
+        let timerInterval = null;
+        let timerCount = 0;
+
+        document.getElementById('load-content').addEventListener('click', () => {
+            setTimeout(() => {
+                document.getElementById('dynamic-area').innerHTML = `
+                    <div class="loaded-content">
+                        <h2>Dynamically Loaded!</h2>
+                        <p>This content was loaded after a delay.</p>
+                        <button id="nested-btn">Nested Button</button>
+                    </div>
+                `;
+                
+                // Add event listener to dynamically created button
+                document.getElementById('nested-btn')?.addEventListener('click', () => {
+                    alert('Nested button clicked!');
+                });
+            }, 1000);
+        });
+
+        document.getElementById('add-item').addEventListener('click', () => {
+            itemCount++;
+            const li = document.createElement('li');
+            li.textContent = `Dynamic item ${itemCount}`;
+            li.className = 'dynamic-item';
+            document.getElementById('dynamic-list').appendChild(li);
+        });
+
+        document.getElementById('start-timer').addEventListener('click', () => {
+            if (!timerInterval) {
+                timerInterval = setInterval(() => {
+                    timerCount++;
+                    document.getElementById('timer').textContent = timerCount;
+                }, 1000);
+            }
+        });
+
+        document.getElementById('stop-timer').addEventListener('click', () => {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        });
+
+        // Simulate AJAX content loading
+        setTimeout(() => {
+            document.getElementById('ajax-content').innerHTML = `
+                <div class="ajax-loaded" data-loaded="true">
+                    <h3>AJAX Content</h3>
+                    <p>This content appeared after page load.</p>
+                </div>
+            `;
+        }, 3000);
+    </script>
+</body>
+</html>
