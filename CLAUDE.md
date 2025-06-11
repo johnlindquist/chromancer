@@ -48,27 +48,29 @@ docker run -d --name chrome-test -p 9222:9222 zenika/alpine-chrome \
 
 ## Architecture Overview
 
-### CDP-CLI Architecture
+### Chromancer Architecture
 
-The CDP-CLI tool follows the oclif framework pattern:
+The Chromancer tool follows the oclif framework pattern:
 
 1. **Base Command Class** (`src/base.ts`):
-   - Handles Chrome connection logic via puppeteer-core
-   - Provides shared flags (port, host, launch)
+   - Handles Chrome connection logic via Playwright
+   - Provides shared flags (port, host, launch, profile)
    - Manages browser lifecycle (connect/disconnect/launch)
    - Auto-detects Chrome executable paths
+   - Supports Chrome profiles for persistent sessions
 
 2. **Command Structure** (`src/commands/`):
    - Each command extends BaseCommand
-   - Commands: navigate, click, type, evaluate, screenshot
+   - Core commands: navigate, click, type, evaluate, screenshot, and many more
    - All commands support global flags for Chrome connection
-   - Commands handle their specific CDP operations
+   - Commands handle their specific browser automation operations
 
 3. **Key Design Decisions**:
-   - Uses puppeteer-core for CDP communication
+   - Uses Playwright for robust browser automation
    - Supports both connecting to existing Chrome instances and auto-launching
    - TypeScript for type safety
    - oclif framework for CLI structure and help generation
+   - YAML workflow support for complex automation scripts
 
 ### Chrome Connection Flow
 
@@ -79,10 +81,11 @@ The CDP-CLI tool follows the oclif framework pattern:
 
 ## Important Notes
 
-- The CDP-CLI tool requires Chrome/Chromium to be installed and running with remote debugging enabled
-- All CDP-CLI commands are in the `cdp-cli` subdirectory
+- Chromancer requires Chrome/Chromium to be installed
 - The tool supports both manual Chrome management and auto-launch mode
 - Tests include unit tests (no Chrome needed) and integration tests (Chrome required)
+- Built with Playwright for reliable browser automation
+- Supports YAML workflows for complex automation scenarios
 
 ## Memories
 

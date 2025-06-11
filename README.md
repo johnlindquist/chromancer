@@ -1,29 +1,39 @@
-# Chromancer
+# Chromancer 🧙
 
 [![npm version](https://badge.fury.io/js/chromancer.svg)](https://www.npmjs.com/package/chromancer)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js Version](https://img.shields.io/node/v/chromancer.svg)](https://nodejs.org)
 
-A command-line interface for automating Chrome browser using the Chrome DevTools Protocol. Perfect for web scraping, automation, and testing.
+A powerful command-line interface for automating Chrome browser using Playwright. Perfect for web scraping, automation, testing, and browser workflows.
+
+## ✨ What's New
+
+- **🎭 Playwright-powered** - Built on Playwright for superior performance and features
+- **📝 YAML Workflows** - Write automation scripts in simple YAML with variable support
+- **💡 Smart Error Tips** - Helpful error messages that teach correct usage
+- **🎯 8 New Commands** - Record, export, fill, scroll, cookies, PDF, network monitoring, and more
+- **🚀 Quick Commands** - One-line site testing and data extraction
+- **⚙️ Config System** - Persistent settings and defaults
+- **📚 Interactive Examples** - Learn by example with categorized recipes
 
 ## Features
 
-- 🚀 Spawn Chrome instances with automatic port management
-- 🔄 Session management - all commands work with your active Chrome instance
-- 🎮 **Interactive REPL mode** - Execute commands interactively with autocomplete and history
-- 🌐 Navigate to URLs with various wait conditions
-- 🖱️ Click elements using CSS selectors
-- ⌨️ Type text into input fields
-- 🔍 Find and inspect elements with detailed information
-- 📜 Execute JavaScript in page context
-- 📸 Take screenshots (full page or viewport)
-- 🛑 Gracefully stop Chrome instances
+- 🚀 **Easy Setup** - Onboarding wizard with `chromancer init`
+- 🔄 **Session Management** - All commands work with your active Chrome instance
+- 🎮 **Interactive REPL** - Execute commands interactively with history
+- 📝 **YAML Workflows** - Automate complex tasks with simple YAML files
+- 🎬 **Record & Replay** - Record browser interactions and generate scripts
+- 📊 **Data Export** - Extract data as JSON, CSV, HTML, or Markdown
+- 🖱️ **Smart Automation** - Click, type, scroll, fill forms automatically
+- 📸 **Screenshots & PDFs** - Capture pages in multiple formats
+- 🍪 **Cookie Management** - Save and restore browser sessions
+- 🌐 **Network Monitoring** - Track and analyze network requests
+- 💡 **Helpful Errors** - Smart error messages with solutions
 
 ## Requirements
 
 - Node.js 18.0.0 or higher
 - Chrome or Chromium browser installed
-- **Windows Users**: Chrome must be installed in the default location or available in PATH
 
 ## Installation
 
@@ -33,369 +43,372 @@ A command-line interface for automating Chrome browser using the Chrome DevTools
 npm install -g chromancer
 ```
 
-After installation, you can use `chromancer` from anywhere:
+### Quick Start
 
 ```bash
-chromancer spawn https://example.com
-chromancer screenshot page.png
-chromancer stop
-```
+# First time? Run the setup wizard
+chromancer init
 
-### Local Installation
-
-```bash
-npm install chromancer
-```
-
-Then use with npx:
-
-```bash
-npx chromancer spawn https://example.com
-```
-
-### Development Setup
-
-```bash
-git clone https://github.com/johnlindquist/chromancer.git
-cd chromancer
-npm install
-npm run build
-```
-
-## Quick Start
-
-The easiest way to get started is using the `spawn` command:
-
-```bash
-# Check version
-chromancer --version
-```
-
-Then spawn Chrome:
-
-```bash
-# Spawn Chrome and open a URL
-chromancer spawn https://example.com
-
-# Spawn Chrome in headless mode
-chromancer spawn https://example.com --headless
-
-# Spawn Chrome on a specific port
-chromancer spawn https://example.com --port 9223
-```
-
-The spawn command automatically:
-- Finds an available port (defaults to 9222, falls back to 9223-9232)
-- Launches Chrome with remote debugging enabled
-- Opens the specified URL (or about:blank if none provided)
-- Displays the DevTools connection URL
-- **Creates an active session that subsequent commands will use automatically**
-
-## Session Management
-
-When you use `spawn`, it creates an active session. All subsequent commands will automatically connect to this Chrome instance without needing to specify the port:
-
-```bash
-# Start a session
-chromancer spawn https://example.com
-
-# These commands automatically use the spawned Chrome
-chromancer navigate https://github.com
-chromancer screenshot page.png
-chromancer evaluate "document.title"
-
-# Stop the Chrome instance
-chromancer stop
-```
-
-## Usage
-
-### Spawn Chrome
-
-```bash
-# Basic usage
-chromancer spawn https://example.com
-
-# With options
-chromancer spawn https://example.com --headless
-chromancer spawn https://example.com --port 9223
-chromancer spawn --user-data-dir /tmp/chrome-profile
-```
-
-### Stop Chrome
-
-```bash
-# Stop the active Chrome session
-chromancer stop
-```
-
-### Navigate to a URL
-
-```bash
-chromancer navigate https://example.com
-chromancer navigate https://example.com --wait-until networkidle0
-```
-
-### Click an element
-
-```bash
-chromancer click "button.submit"
-chromancer click "#login-button" --wait-for-selector
-```
-
-### Type text
-
-```bash
-chromancer type "input[name=email]" "user@example.com"
-chromancer type "#search-box" "search query" --clear-first
-```
-
-### Select elements
-
-```bash
-chromancer select "button"
-chromancer select "a[href]" --attributes
-chromancer select ".my-class" --limit 10
-chromancer select "button" --interactive
-```
-
-The select command finds elements matching a CSS selector and provides:
-- A unique selector for each element that can be used with click/type commands
-- Element visibility status
-- Text content, position, and dimensions
-- HTML attributes (with --attributes flag)
-- Interactive mode (with --interactive flag) to select an element and copy its selector to clipboard
-
-### Execute JavaScript
-
-```bash
-chromancer evaluate "document.title"
-chromancer evaluate "document.querySelectorAll('a').length"
-```
-
-### Take screenshot
-
-```bash
-chromancer screenshot screenshot.png
-chromancer screenshot fullpage.png --full-page
-```
-
-### Interactive Mode (REPL)
-
-Start an interactive session where you can execute commands without reconnecting to Chrome each time:
-
-```bash
-# Start interactive mode
-chromancer interactive
-# or use the alias
-chromancer session
-
-# With options
-chromancer interactive --launch
-chromancer session --port 9223
-```
-
-In interactive mode:
-- Tab completion for commands
-- Command history (up/down arrows)
-- Persistent Chrome connection
-- Type `help` for available commands
-- Type `exit` to quit
-
-Interactive commands:
-- `navigate <url>` - Navigate to URL
-- `click <selector>` - Click element
-- `type <selector> <text>` - Type text
-- `evaluate <js>` - Execute JavaScript
-- `screenshot [filename]` - Take screenshot
-- `select <selector>` - Find elements
-- `back/forward/reload` - Browser navigation
-- `url/title` - Get page info
-- `viewport [width] [height]` - Get/set viewport
-- `cookies` - List cookies
-- `help` - Show commands
-- `clear` - Clear console
-- `exit` - Exit session
-
-## Global Options
-
-All commands (except spawn and stop) support these options:
-
-- `-p, --port <number>` - Chrome debugging port (uses active session by default)
-- `-h, --host <string>` - Chrome debugging host (default: localhost)
-- `-l, --launch` - Launch Chrome automatically if not running
-
-## Example Workflow
-
-```bash
-# Spawn Chrome with session
-chromancer spawn https://github.com
-
-# Take a screenshot (automatically uses the spawned Chrome)
-chromancer screenshot github-home.png
-
-# Find search elements
-chromancer select "input"
-
-# Search for something
-chromancer type "input[name=q]" "oclif" --clear-first
-chromancer click "button[type=submit]"
-
-# Count search results
-chromancer evaluate "document.querySelectorAll('.repo-list-item').length"
-
-# Stop Chrome when done
-chromancer stop
-```
-
-### Tutorial: Automating Google Search
-
-This tutorial shows how to search Google using chromancer in headed mode, which allows you to interact with any CAPTCHAs that may appear:
-
-```bash
-# Step 1: Spawn Chrome in headed mode (not headless) so you can see and interact with it
+# Start Chrome
 chromancer spawn
 
-# Step 2: Navigate to Google
-chromancer navigate https://www.google.com
+# Try it out!
+chromancer navigate https://example.com
+chromancer screenshot example.png
+```
 
-# Step 3: Type your search query
-chromancer type 'textarea[name="q"]' "hello world"
+## 🎯 Core Commands
 
-# Step 4: Submit the search (using JavaScript since the button might be hidden)
-chromancer evaluate "document.querySelector('textarea[name=\"q\"]').form.submit()"
+### Browser Control
 
-# Step 5: If a CAPTCHA appears, solve it manually in the browser window
+```bash
+# Start Chrome with remote debugging
+chromancer spawn                    # Opens Chrome
+chromancer spawn --headless         # Headless mode
+chromancer spawn --profile work     # Use Chrome profile
 
-# Step 6: Once past any CAPTCHA, get the search results
-chromancer evaluate "Array.from(document.querySelectorAll('h3')).slice(0, 5).map(h => h.textContent).filter(Boolean)"
+# Navigate pages
+chromancer navigate https://example.com
+chromancer go https://example.com   # Alias for navigate
 
-# Step 7: Take a screenshot of the results
-chromancer screenshot google-results.png
-
-# Step 8: Stop Chrome when done
+# Stop Chrome
 chromancer stop
 ```
 
-**Important Notes:**
-- Use headed mode (don't use `--headless`) so you can interact with CAPTCHAs
-- Google often shows CAPTCHAs for automated browsers
-- After solving the CAPTCHA manually, continue with the remaining commands
-- The search results selector may vary based on Google's current HTML structure
-
-### Alternative: Connect to existing Chrome
-
-If you already have Chrome running with remote debugging enabled:
+### Page Interaction
 
 ```bash
-# Use the CLI commands with the specific port
-chromancer navigate https://example.com --port 9222
+# Click elements
+chromancer click "button.submit"
+chromancer click "#menu" --right    # Right click
+
+# Type text
+chromancer type "input[name=email]" "user@example.com"
+chromancer type "#search" "query" --press-enter
+
+# Fill forms automatically
+chromancer fill --auto-generate     # Generate test data
+chromancer fill --data '{"name": "John", "email": "john@example.com"}'
+
+# Scroll pages
+chromancer scroll down
+chromancer scroll --to "#footer"
+chromancer scroll --by 500          # Pixels
 ```
 
-### Platform-Specific Notes
-
-#### Windows
-- Chrome is automatically detected in common installation paths
-- The CLI will check the Windows Registry for Chrome location
-- Process management uses Windows-specific commands (taskkill)
-- Use `.bat` scripts instead of `.sh` scripts for testing
-
-#### macOS
-- Supports Chrome, Chromium, and Chrome Canary
-- Looks for applications in /Applications folder
-
-#### Linux
-- Checks common package manager installation paths
-- Supports snap packages (/snap/bin/chromium)
-
-## Testing
-
-### Unit Tests
-
-Run unit tests to verify CLI structure:
+### Data Extraction
 
 ```bash
-node test/unit-tests.js
+# Take screenshots
+chromancer screenshot page.png
+chromancer shot page.png            # Alias
+
+# Generate PDFs
+chromancer pdf --output report.pdf --format A4
+
+# Export page data
+chromancer export --format json --selector "table"
+chromancer export --format csv --output data.csv
+
+# Quick data extraction
+chromancer quick extract https://news.site "h2.headline"
 ```
 
-### Integration Tests
-
-For full integration testing with Chrome:
+### Testing & Monitoring
 
 ```bash
-# Option 1: Use spawn command
-chromancer spawn --headless
-node test/test-suite.js
+# Quick site check
+chromancer quick check example.com
 
-# Option 2: Use Docker Chrome
+# Comprehensive site test
+chromancer quick test example.com   # Tests a11y, performance, mobile, console errors
+
+# Monitor network traffic
+chromancer network --filter "api" --type xhr
+chromancer network --block "ads" --block "analytics"
+
+# Wait for conditions
+chromancer wait --selector ".loaded"
+chromancer wait --text "Success"
+chromancer wait --url "https://example.com/dashboard"
+```
+
+## 📝 YAML Workflows
+
+Create reusable automation scripts with YAML:
+
+### Example: Login Workflow
+
+```yaml
+# login.yml
+- navigate: https://github.com/login
+- type:
+    selector: input[name="login"]
+    text: ${USERNAME}
+- type:
+    selector: input[name="password"]
+    text: ${PASSWORD}
+- click: input[type="submit"]
+- wait:
+    url: https://github.com
+- screenshot: logged-in.png
+```
+
+Run with variables:
+```bash
+chromancer run login.yml --var USERNAME=myuser --var PASSWORD=mypass
+```
+
+### Example: Web Scraping
+
+```yaml
+# scrape-news.yml
+- navigate: https://news.ycombinator.com
+- wait: .itemlist
+- evaluate: |
+    Array.from(document.querySelectorAll('.athing')).slice(0, 10).map(item => ({
+      title: item.querySelector('.titleline a')?.textContent,
+      link: item.querySelector('.titleline a')?.href
+    }))
+- export:
+    format: json
+    output: news-stories.json
+```
+
+## 🎬 Recording Browser Actions
+
+Record your interactions and generate automation scripts:
+
+```bash
+# Start recording
+chromancer record --output actions.json
+
+# Perform actions in browser...
+# Press Ctrl+C to stop
+
+# Generate JavaScript
+chromancer record --output script.js --format js
+```
+
+## 🍪 Session Management
+
+Save and restore browser sessions:
+
+```bash
+# Save cookies
+chromancer cookies save --output session.json
+
+# Restore cookies
+chromancer cookies load --file session.json
+
+# Manage individual cookies
+chromancer cookies list
+chromancer cookies set sessionId=abc123
+chromancer cookies delete trackingId
+```
+
+## 🎮 Interactive Mode
+
+Start an interactive session for rapid testing:
+
+```bash
+chromancer interactive
+
+# In the session:
+> navigate https://example.com
+> click button
+> type input "text"
+> screenshot test.png
+> help              # Show all commands
+> exit
+```
+
+## ⚙️ Configuration
+
+Set persistent defaults:
+
+```bash
+# View current config
+chromancer config list
+
+# Set defaults
+chromancer config set chrome.port 9223
+chromancer config set commands.screenshot.fullPage true
+chromancer config set ui.colorOutput false
+
+# Reset to defaults
+chromancer config reset
+```
+
+## 📚 Learning Resources
+
+### Interactive Examples
+
+```bash
+# List all example categories
+chromancer examples --list
+
+# View specific examples
+chromancer examples login       # Authentication patterns
+chromancer examples scraping    # Data extraction
+chromancer examples testing     # Site testing
+chromancer examples forms       # Form automation
+```
+
+### Quick Commands for Common Tasks
+
+```bash
+# Quick site check - health, performance, accessibility
+chromancer quick check example.com
+
+# Quick screenshot
+chromancer quick capture https://example.com screenshot.png
+
+# Quick data extraction
+chromancer quick extract https://news.site "article h2" --json
+```
+
+## 🔧 Advanced Features
+
+### Chrome Profiles
+
+Use different Chrome profiles for different tasks:
+
+```bash
+# Personal browsing
+chromancer spawn --profile personal
+
+# Work browsing with saved logins
+chromancer spawn --profile work
+```
+
+### Wait for Login
+
+Handle authentication flows:
+
+```bash
+# Navigate and wait for manual login
+chromancer wait-for-login https://app.example.com
+
+# With custom ready selector
+chromancer wait-for-login https://github.com --ready-selector ".Header-link--profile"
+```
+
+### Error Handling in Workflows
+
+```bash
+# Continue on error
+chromancer run workflow.yml --continue-on-error
+
+# Strict mode (default) - stop on first error
+chromancer run workflow.yml --strict
+```
+
+## 💡 Smart Error Messages
+
+Chromancer provides helpful error messages with solutions:
+
+```
+❌ Element not found: button
+💡 Tip: Did you forget to add a class (.) or ID (#) prefix?
+
+Example:
+   chromancer click ".button" # for class
+   chromancer click "#button" # for ID
+
+📚 Docs: https://chromancer.dev/docs/click#errors
+```
+
+## 🧪 Testing
+
+```bash
+# Run unit tests
+npm test
+
+# Run working features test
+node test/test-working-features.js
+
+# Test with Docker Chrome
 docker run -d --name chrome-test -p 9222:9222 zenika/alpine-chrome \
   --no-sandbox --remote-debugging-host=0.0.0.0 --remote-debugging-port=9222
-node test/test-suite.js
-docker stop chrome-test && docker rm chrome-test
-
-# Option 3: Auto-launch Chrome with any command
-chromancer navigate https://example.com --launch
 ```
 
-### Mock Server Test
+## Example Workflows
 
-Test basic connectivity without Chrome:
+### Daily Screenshot
 
 ```bash
-node test/mock-chrome-test.js
+#!/bin/bash
+chromancer spawn --headless
+chromancer navigate https://dashboard.example.com
+chromancer wait --selector ".data-loaded"
+chromancer screenshot "dashboard-$(date +%Y%m%d).png"
+chromancer stop
 ```
+
+### Form Testing
+
+```yaml
+# test-registration.yml
+- navigate: https://app.example.com/register
+- fill:
+    form:
+      firstName: Test
+      lastName: User
+      email: test@example.com
+      password: SecurePass123!
+- click: input[name="terms"]
+- screenshot: form-filled.png
+- click: button[type="submit"]
+- wait:
+    text: "Registration successful"
+```
+
+### API Monitoring
+
+```bash
+# Monitor API calls for 30 seconds
+chromancer navigate https://app.example.com
+chromancer network --filter "/api/" --duration 30000 --output api-calls.json
+
+# Analyze the results
+cat api-calls.json | jq '.[] | select(.duration > 1000)'
+```
+
+## Platform Support
+
+- **Windows**: Full support with automatic Chrome detection
+- **macOS**: Supports Chrome, Chromium, and Chrome Canary
+- **Linux**: Supports system packages and snap packages
+- **Docker**: Works with headless Chrome containers
 
 ## Troubleshooting
 
 ### Chrome not found
 
-If Chromancer can't find Chrome, you can:
-
-1. Make sure Chrome or Chromium is installed
-2. Add Chrome to your PATH
-3. Use the spawn command which will auto-detect Chrome location
-
-### Port already in use
-
-If the default port (9222) is in use:
-
 ```bash
-# Use a different port
-chromancer spawn --port 9223
+# Let chromancer find Chrome
+chromancer spawn
 
-# Or stop any existing session
-chromancer stop
+# Or specify Chrome location
+export CHROME_PATH="/path/to/chrome"
 ```
 
-### Permission denied
-
-On Linux/macOS, you might need to make the binary executable:
+### Debugging issues
 
 ```bash
-chmod +x $(which chromancer)
-```
-
-### Debugging connection issues
-
-Use the `--verbose` flag to get detailed logging information:
-
-```bash
-# Debug navigation timeouts
+# Use verbose mode for detailed logs
 chromancer navigate https://example.com --verbose
 
-# Debug connection problems
-chromancer spawn --verbose
-
-# See detailed information about page loading
-chromancer navigate https://slow-site.com --verbose --timeout 60000
+# Check Chrome connection
+chromancer quick check localhost
 ```
 
-The verbose flag provides:
-- Detailed connection timing and browser information
-- All network requests and responses during navigation
-- Page load events and performance metrics
-- Error details with stack traces
-- Console messages from the page
+### Common Issues
+
+- **Port in use**: Use `chromancer stop` or specify a different port with `--port`
+- **Timeouts**: Increase timeout with `--timeout 60000`
+- **Selectors not found**: Use `chromancer select` to explore available elements
 
 ## Contributing
 
@@ -408,3 +421,7 @@ The verbose flag provides:
 ## License
 
 MIT © John Lindquist
+
+## Acknowledgments
+
+Chromancer is now powered by [Playwright](https://playwright.dev/) for robust browser automation.

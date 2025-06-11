@@ -16,7 +16,7 @@ describe('Error Utilities', () => {
       expect(isTimeoutError(error)).toBe(true);
     });
 
-    it('should identify puppeteer timeout errors', () => {
+    it('should identify playwright timeout errors', () => {
       const error = new Error('Waiting failed: timeout 30000ms exceeded');
       
       expect(isTimeoutError(error)).toBe(true);
