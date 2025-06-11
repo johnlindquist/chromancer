@@ -48,10 +48,11 @@ runTest('Chrome scanner utilities are available', () => {
 });
 
 // Test 2: Spawn command has profile options
-runTest('Spawn command has --no-profile flag', () => {
+runTest('Spawn command has profile options', () => {
   const help = execSync('node ../bin/run.js spawn --help', { encoding: 'utf8', cwd: __dirname });
-  assert(help.includes('--no-profile'), '--no-profile flag not found');
-  assert(help.includes('Launch Chrome without any profile'), 'no-profile description not found');
+  assert(help.includes('--use-default-profile'), '--use-default-profile flag not found');
+  assert(help.includes('WARNING'), 'Should warn about profile picker');
+  assert(help.includes('--profile'), '--profile flag not found');
 });
 
 // Test 3: Spawn command has wait-for-ready option
@@ -64,9 +65,9 @@ runTest('Spawn command has --wait-for-ready flag', () => {
 // Test 4: Spawn examples show profile options
 runTest('Spawn examples include profile scenarios', () => {
   const help = execSync('node ../bin/run.js spawn --help', { encoding: 'utf8', cwd: __dirname });
-  assert(help.includes('--no-profile'), 'Should show --no-profile example');
-  assert(help.includes('Skip profile picker'), 'Should explain no-profile usage');
+  assert(help.includes('Default: temporary profile'), 'Should show default behavior');
   assert(help.includes('--profile'), 'Should show --profile example');
+  assert(help.includes('Use saved profile'), 'Should explain profile usage');
 });
 
 // Test 5: Navigate command handles connection failures gracefully
@@ -106,7 +107,7 @@ runTest('Chrome scanner can check port availability', async () => {
 });
 
 // Test 7: Base command shows improved error messages
-runTest('Base command error mentions profile options', () => {
+runTest('Base command error mentions spawn options', () => {
   try {
     execSync('node ../bin/run.js click button 2>&1', { 
       encoding: 'utf8', 
@@ -115,8 +116,8 @@ runTest('Base command error mentions profile options', () => {
     });
   } catch (error) {
     const output = error.stdout || error.stderr || '';
-    assert(output.includes('spawn --no-profile') || output.includes('Possible solutions'), 
-      'Error should mention profile options');
+    assert(output.includes('spawn') || output.includes('Possible solutions'), 
+      'Error should mention spawn command');
   }
 });
 

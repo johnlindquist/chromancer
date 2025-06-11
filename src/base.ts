@@ -176,8 +176,8 @@ export abstract class BaseCommand extends Command {
 
 Possible solutions:
 1. Use --launch flag to start a new Chrome instance
-2. Use 'chromancer spawn --no-profile' to avoid profile picker
-3. Use 'chromancer spawn --profile NAME' for a specific profile
+2. Use 'chromancer spawn' to start Chrome (avoids profile picker by default)
+3. Use 'chromancer spawn --profile NAME' for a specific saved profile
 4. Start Chrome manually with: chrome --remote-debugging-port=${port}`)
       }
     }
@@ -278,16 +278,16 @@ Possible solutions:
       if (this.isLaunched) {
         if (this.keepOpen) {
           this.log('🔓 Keeping Chrome open (use --no-keepOpen to close automatically)')
-          // Just disconnect, don't close the browser
-          // Just disconnect by not closing the browser
-          // Browser remains open
+          // For launched browsers that we want to keep open, we don't close them
+          // The browser will continue running after our process exits
         } else {
           this.log('🔒 Closing Chrome...')
           await this.browser.close()
         }
       } else {
-        // Was connected to existing instance, just disconnect
-        // Browser remains open
+        // Was connected to existing instance
+        // For connected browsers, we don't need to do anything special
+        // The connection will be cleaned up when the process exits
       }
     }
   }

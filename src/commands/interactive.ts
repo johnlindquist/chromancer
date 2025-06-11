@@ -83,6 +83,7 @@ export default class Interactive extends BaseCommand {
       output: process.stdout,
       prompt: 'chromancer> ',
       completer: this.completer.bind(this),
+      terminal: true, // Force terminal mode
     })
 
     // Setup key bindings for history navigation
@@ -92,6 +93,9 @@ export default class Interactive extends BaseCommand {
     this.log('Type "help" for available commands, "exit" to quit')
     this.log('')
 
+    // Ensure stdin stays open
+    process.stdin.resume()
+    
     // Display prompt
     this.rl.prompt()
 
@@ -506,10 +510,13 @@ export default class Interactive extends BaseCommand {
   }
 
   async finally(): Promise<void> {
+    // Don't call super.finally() in interactive mode
+    // We want to keep the browser connection alive
     if (this.rl) {
       this.rl.close()
     }
     this.saveHistory()
-    await super.finally()
+    // Only disconnect when the REPL is actually closing
+    // This will be handled by process.exit() in the close handler
   }
 }

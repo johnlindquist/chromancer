@@ -10,12 +10,11 @@ export default class Spawn extends Command {
   static description = 'Launch Chrome with remote debugging enabled using Playwright for reliable automation - supports auto-launch, profiles, and headless mode'
 
   static examples = [
-    '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --no-profile  # Skip profile picker',
-    '<%= config.bin %> <%= command.id %> --profile work  # Use specific profile',
-    '<%= config.bin %> <%= command.id %> --port 9223  # Use different port',
+    '<%= config.bin %> <%= command.id %>  # Default: temporary profile',
+    '<%= config.bin %> <%= command.id %> --profile work  # Use saved profile',
+    '<%= config.bin %> <%= command.id %> --port 9223  # Different port',
     '<%= config.bin %> <%= command.id %> --headless  # Headless mode',
-    '<%= config.bin %> <%= command.id %> https://example.com  # Open specific URL',
+    '<%= config.bin %> <%= command.id %> https://example.com  # Open URL',
   ]
 
   static flags = {
@@ -31,8 +30,8 @@ export default class Spawn extends Command {
     profile: Flags.string({
       description: 'Chrome profile name or path to use',
     }),
-    'no-profile': Flags.boolean({
-      description: 'Launch Chrome without any profile (incognito-like)',
+    'use-default-profile': Flags.boolean({
+      description: 'Use default Chrome profile (WARNING: shows profile picker, breaks debugging)',
       default: false,
     }),
     'wait-for-ready': Flags.boolean({
@@ -112,19 +111,26 @@ export default class Spawn extends Command {
         chromeArgs.push('--headless')
       }
       
-      if (flags.profile && !flags['no-profile']) {
+      if (flags.profile) {
+        // Use specified profile
         const profilePath = this.getProfilePath(flags.profile)
         this.log(`📁 Using Chrome profile: ${profilePath}`)
         chromeArgs.push(`--user-data-dir=${profilePath}`)
-      } else if (flags['no-profile']) {
-        // Launch with a temporary profile to avoid profile picker
+      } else if (flags['use-default-profile']) {
+        // User explicitly wants default profile - warn them
+        this.warn(`⚠️  WARNING: Using default Chrome profile will show profile picker`)
+        this.warn(`⚠️  The debugger CANNOT connect when profile picker is shown!`)
+        this.log(`\n❓ Continue anyway? The debugger will likely fail to connect.`)
+        
+        // Add a delay to let user read the warning
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        // Don't add any user-data-dir, let Chrome use its default
+      } else {
+        // Default behavior: use a temporary profile to avoid profile picker
         const tempDir = path.join(os.tmpdir(), `chromancer-temp-${Date.now()}`)
         chromeArgs.push(`--user-data-dir=${tempDir}`)
-        this.log(`🔒 Using temporary profile (no saved data)`)
-      } else {
-        // Default Chrome profile - this might show profile picker
-        this.log(`⚠️  Using default Chrome profile (may show profile picker)`)
-        this.log(`💡 Use --no-profile to skip profile picker`)
+        this.log(`🔒 Using temporary profile (avoids profile picker)`)
+        this.log(`💡 Use --profile NAME to use a specific profile`)
       }
       
       // Add the URL if provided
