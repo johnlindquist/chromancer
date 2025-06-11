@@ -80,6 +80,8 @@ export default class Spawn extends Command {
         this.error('Chrome executable not found. Please install Chrome or Chromium.')
       }
       
+      this.log(`📍 Found Chrome at: ${chromeExecutable}`)
+      
       // Build Chrome args
       const chromeArgs = [
         `--remote-debugging-port=${flags.port}`,
@@ -103,10 +105,17 @@ export default class Spawn extends Command {
       }
       
       // Launch Chrome detached
-      const chromeProcess = spawn(chromeExecutable, chromeArgs, {
+      const spawnOptions: any = {
         detached: true,
         stdio: 'ignore',
-      })
+      }
+      
+      // On Windows, we need to use shell to properly detach
+      if (process.platform === 'win32') {
+        spawnOptions.shell = true
+      }
+      
+      const chromeProcess = spawn(chromeExecutable, chromeArgs, spawnOptions)
       
       // Allow the parent process to exit
       chromeProcess.unref()
@@ -119,30 +128,46 @@ export default class Spawn extends Command {
         url: args.url,
       })
       
-      // Wait a moment to ensure Chrome starts
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Wait a moment for Chrome to start and then verify
+      let chromeStarted = false
+      const maxRetries = 5
       
-      // Verify Chrome started
-      try {
-        const response = await fetch(`http://localhost:${flags.port}/json/version`)
-        if (!response.ok) {
-          throw new Error('Chrome did not start properly')
+      for (let i = 0; i < maxRetries; i++) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        try {
+          const response = await fetch(`http://localhost:${flags.port}/json/version`)
+          if (response.ok) {
+            chromeStarted = true
+            break
+          }
+        } catch (error) {
+          // Chrome not ready yet, continue waiting
+          if (i < maxRetries - 1) {
+            this.log(`⏳ Waiting for Chrome to start... (${i + 1}/${maxRetries})`)
+          }
         }
-      } catch (error) {
-        this.error('Chrome failed to start. Please check if the port is available.')
       }
       
-      this.log(`✅ Chrome launched successfully!`)
-      this.log(`🔗 Remote debugging URL: http://localhost:${flags.port}`)
-      
-      if (flags.profile) {
-        this.log(`📁 Profile: ${flags.profile}`)
+      if (chromeStarted) {
+        this.log(`✅ Chrome launched successfully!`)
+        this.log(`🔗 Remote debugging URL: http://localhost:${flags.port}`)
+        
+        if (flags.profile) {
+          this.log(`📁 Profile: ${flags.profile}`)
+        }
+        
+        this.log(`\n💡 Chrome is running in the background. Use these commands:`)
+        this.log(`   chromancer navigate example.com`)
+        this.log(`   chromancer click "#button"`)
+        this.log(`   chromancer stop  # To close Chrome`)
+      } else {
+        // Even if we can't verify, Chrome might still be starting up
+        this.log(`⚠️  Chrome launched but could not verify connection on port ${flags.port}`)
+        this.log(`   Chrome may still be starting up. Try these commands in a moment:`)
+        this.log(`   chromancer navigate example.com`)
+        this.log(`   chromancer stop  # To close Chrome`)
       }
-      
-      this.log(`\n💡 Chrome is running in the background. Use these commands:`)
-      this.log(`   chromancer navigate example.com`)
-      this.log(`   chromancer click "#button"`)
-      this.log(`   chromancer stop  # To close Chrome`)
     } catch (error: any) {
       this.error(`Failed to spawn Chrome: ${error.message}`)
     }
