@@ -11,8 +11,36 @@ export interface ChromeSession {
 }
 
 export class SessionManager {
+  private static instance: SessionManager
   private static sessionFile = path.join(os.tmpdir(), 'chromancer-session.json')
   private static activeProcess: ChildProcess | null = null
+  private browserInstance: any = null
+  private contextInstance: any = null
+  private pageInstance: any = null
+
+  static getInstance(): SessionManager {
+    if (!this.instance) {
+      this.instance = new SessionManager()
+    }
+    return this.instance
+  }
+
+  setBrowserInstance(browser: any, context: any, page: any): void {
+    this.browserInstance = browser
+    this.contextInstance = context
+    this.pageInstance = page
+  }
+
+  getBrowserInstance(): { browser: any, context: any, page: any } | null {
+    if (this.browserInstance) {
+      return {
+        browser: this.browserInstance,
+        context: this.contextInstance,
+        page: this.pageInstance
+      }
+    }
+    return null
+  }
 
   static setActiveProcess(process: ChildProcess): void {
     this.activeProcess = process

@@ -1,8 +1,8 @@
 import { Args, Command, Flags } from '@oclif/core'
-import { chromium } from 'playwright'
 import * as net from 'net'
 import * as path from 'path'
 import * as os from 'os'
+import { spawn, execSync } from 'child_process'
 import { SessionManager } from '../session.js'
 
 export default class Spawn extends Command {
@@ -64,66 +64,169 @@ export default class Spawn extends Command {
     const { args, flags } = await this.parse(Spawn)
     
     try {
-      this.log(`🚀 Launching Chrome with remote debugging on port ${flags.port}...`)
-      
-      const launchOptions: any = {
-        headless: flags.headless,
-        args: [
-          `--remote-debugging-port=${flags.port}`,
-          '--no-first-run',
-          '--no-default-browser-check',
-        ],
-        channel: 'chrome',
-        // Keep browser running after script ends
-        handleSIGINT: false,
-        handleSIGTERM: false,
-        handleSIGHUP: false,
+      // Check if Chrome is already running on this port
+      const isPortInUse = await this.checkPort(flags.port)
+      if (isPortInUse) {
+        this.log(`⚠️  Chrome is already running on port ${flags.port}`)
+        this.log(`💡 Use 'chromancer stop' to close it first, or use a different port with --port`)
+        return
       }
       
-      // Add profile support
+      this.log(`🚀 Launching Chrome with remote debugging on port ${flags.port}...`)
+      
+      // Find Chrome executable
+      const chromeExecutable = this.findChromeExecutable()
+      if (!chromeExecutable) {
+        this.error('Chrome executable not found. Please install Chrome or Chromium.')
+      }
+      
+      // Build Chrome args
+      const chromeArgs = [
+        `--remote-debugging-port=${flags.port}`,
+        '--no-first-run',
+        '--no-default-browser-check',
+      ]
+      
+      if (flags.headless) {
+        chromeArgs.push('--headless')
+      }
+      
       if (flags.profile) {
         const profilePath = this.getProfilePath(flags.profile)
         this.log(`📁 Using Chrome profile: ${profilePath}`)
-        launchOptions.args.push(`--user-data-dir=${profilePath}`)
+        chromeArgs.push(`--user-data-dir=${profilePath}`)
       }
       
-      const browser = await chromium.launch(launchOptions)
-      const context = browser.contexts()[0] || await browser.newContext()
-      const page = context.pages()[0] || await context.newPage()
-      
-      // Navigate to the specified URL
+      // Add the URL if provided
       if (args.url && args.url !== 'about:blank') {
-        await page.goto(args.url)
+        chromeArgs.push(args.url)
       }
       
-      // Playwright doesn't expose wsEndpoint directly, but we can use the port
-      const wsEndpoint = `ws://localhost:${flags.port}`
+      // Launch Chrome detached
+      const chromeProcess = spawn(chromeExecutable, chromeArgs, {
+        detached: true,
+        stdio: 'ignore',
+      })
+      
+      // Allow the parent process to exit
+      chromeProcess.unref()
+      
+      // Save session info
+      SessionManager.saveSession({
+        port: flags.port,
+        pid: chromeProcess.pid!,
+        startTime: Date.now(),
+        url: args.url,
+      })
+      
+      // Wait a moment to ensure Chrome starts
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // Verify Chrome started
+      try {
+        const response = await fetch(`http://localhost:${flags.port}/json/version`)
+        if (!response.ok) {
+          throw new Error('Chrome did not start properly')
+        }
+      } catch (error) {
+        this.error('Chrome failed to start. Please check if the port is available.')
+      }
       
       this.log(`✅ Chrome launched successfully!`)
       this.log(`🔗 Remote debugging URL: http://localhost:${flags.port}`)
-      this.log(`🔌 WebSocket endpoint: ${wsEndpoint}`)
       
       if (flags.profile) {
         this.log(`📁 Profile: ${flags.profile}`)
       }
       
-      this.log(`\n💡 To connect from another terminal:`)
-      this.log(`   chromancer navigate https://example.com --port ${flags.port}`)
-      this.log(`   chromancer click "#button" --port ${flags.port}`)
-      
-      this.log(`\n⌛ Chrome will stay open. Press Ctrl+C to close.`)
-      
-      // Keep the process alive
-      process.on('SIGINT', async () => {
-        this.log('\n🔒 Closing Chrome...')
-        await browser.close()
-        process.exit(0)
-      })
-      
-      // Prevent the process from exiting
-      await new Promise(() => {})
+      this.log(`\n💡 Chrome is running in the background. Use these commands:`)
+      this.log(`   chromancer navigate example.com`)
+      this.log(`   chromancer click "#button"`)
+      this.log(`   chromancer stop  # To close Chrome`)
     } catch (error: any) {
       this.error(`Failed to spawn Chrome: ${error.message}`)
     }
+  }
+  
+  private async checkPort(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const server = net.createServer()
+      server.once('error', () => resolve(true))
+      server.once('listening', () => {
+        server.close()
+        resolve(false)
+      })
+      server.listen(port)
+    })
+  }
+  
+  private findChromeExecutable(): string | null {
+    const platform = process.platform
+    
+    // Common Chrome executable names
+    const executables = [
+      'google-chrome',
+      'google-chrome-stable',
+      'google-chrome-beta',
+      'google-chrome-dev',
+      'chromium',
+      'chromium-browser',
+      'chrome',
+    ]
+    
+    try {
+      if (platform === 'darwin') {
+        // macOS paths
+        const paths = [
+          '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+          '/Applications/Chromium.app/Contents/MacOS/Chromium',
+          '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
+          '/usr/bin/chromium-browser',
+          '/usr/bin/google-chrome',
+        ]
+        
+        for (const chromePath of paths) {
+          try {
+            execSync(`test -f "${chromePath}"`, { stdio: 'ignore' })
+            return chromePath
+          } catch {
+            // Continue checking
+          }
+        }
+      } else if (platform === 'win32') {
+        // Windows paths
+        const paths = [
+          process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe',
+          process.env.PROGRAMFILES + '\\Google\\Chrome\\Application\\chrome.exe',
+          process.env['PROGRAMFILES(X86)'] + '\\Google\\Chrome\\Application\\chrome.exe',
+          process.env.LOCALAPPDATA + '\\Chromium\\Application\\chrome.exe',
+        ]
+        
+        for (const chromePath of paths) {
+          try {
+            execSync(`if exist "${chromePath}" exit 0`, { stdio: 'ignore', shell: 'cmd.exe' })
+            return chromePath
+          } catch {
+            // Continue checking
+          }
+        }
+      } else {
+        // Linux - try which command
+        for (const exe of executables) {
+          try {
+            const result = execSync(`which ${exe} 2>/dev/null`, { encoding: 'utf8' }).trim()
+            if (result) {
+              return result
+            }
+          } catch {
+            // Continue checking
+          }
+        }
+      }
+    } catch (error) {
+      // Ignore errors and return null
+    }
+    
+    return null
   }
 }
