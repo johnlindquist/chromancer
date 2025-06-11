@@ -8,12 +8,12 @@ async function testWaitCommand() {
   
   try {
     // Test help
-    const helpResult = await execAsync('node ./bin/run.js wait --help');
+    const helpResult = await execAsync('node ../bin/run.js wait --help');
     console.log('✅ Wait command help works');
     console.log(helpResult.stdout);
     
     // Test hover help
-    const hoverHelp = await execAsync('node ./bin/run.js hover --help');
+    const hoverHelp = await execAsync('node ../bin/run.js hover --help');
     console.log('\n✅ Hover command help works');
     console.log(hoverHelp.stdout);
     

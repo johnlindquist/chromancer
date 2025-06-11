@@ -40,7 +40,7 @@ async function testErrorTips() {
     console.log('-'.repeat(60));
     
     try {
-      await execAsync(`node ./bin/run.js ${test.command}`, {
+      await execAsync(`node ../bin/run.js ${test.command}`, {
         timeout: 5000
       });
     } catch (error) {

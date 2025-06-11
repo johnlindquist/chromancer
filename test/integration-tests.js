@@ -7,7 +7,7 @@ const execAsync = promisify(exec);
 // Helper to run chromancer commands
 async function runCommand(cmd, expectFailure = false) {
   try {
-    const { stdout, stderr } = await execAsync(`node ./bin/run.js ${cmd}`);
+    const { stdout, stderr } = await execAsync(`node ../bin/run.js ${cmd}`);
     return { success: true, stdout, stderr };
   } catch (error) {
     if (expectFailure) {

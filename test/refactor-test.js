@@ -9,27 +9,27 @@ async function testRefactoredCommands() {
   const tests = [
     {
       name: 'Click command help',
-      cmd: 'node ./bin/run.js click --help',
+      cmd: 'node ../bin/run.js click --help',
       check: (output) => output.includes('Wait for selector') && output.includes('CSS selector')
     },
     {
       name: 'Hover command help',
-      cmd: 'node ./bin/run.js hover --help',
+      cmd: 'node ../bin/run.js hover --help',
       check: (output) => output.includes('Hover over an element') && output.includes('Duration')
     },
     {
       name: 'Wait command help',
-      cmd: 'node ./bin/run.js wait --help',
+      cmd: 'node ../bin/run.js wait --help',
       check: (output) => output.includes('Wait for elements') && output.includes('--selector')
     },
     {
       name: 'Store command help',
-      cmd: 'node ./bin/run.js store --help',
+      cmd: 'node ../bin/run.js store --help',
       check: (output) => output.includes('Store values') && output.includes('--as')
     },
     {
       name: 'Assert command help',
-      cmd: 'node ./bin/run.js assert --help',
+      cmd: 'node ../bin/run.js assert --help',
       check: (output) => output.includes('Assert conditions') && output.includes('--equals')
     }
   ];

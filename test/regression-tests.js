@@ -36,7 +36,7 @@ let failed = 0;
 // Test 1: Handle special characters in selectors
 if (runTest('Special characters in selectors', () => {
   try {
-    execSync('node ./bin/run.js click "div[data-test=\'value\']" --help 2>&1', { encoding: 'utf8' });
+    execSync('node ../bin/run.js click "div[data-test=\'value\']" --help 2>&1', { encoding: 'utf8' });
   } catch (e) {
     // Should show help, not crash
     assert(e.message.includes('CSS selector'), 'Should handle special chars gracefully');
@@ -47,7 +47,7 @@ if (runTest('Special characters in selectors', () => {
 if (runTest('Long text input handling', () => {
   const longText = 'a'.repeat(1000);
   try {
-    execSync(`node ./bin/run.js type --help 2>&1`, { encoding: 'utf8' });
+    execSync(`node ../bin/run.js type --help 2>&1`, { encoding: 'utf8' });
     // Just verify command structure works with potentially long inputs
   } catch (e) {
     throw new Error('Should handle long text parameters');
@@ -59,14 +59,14 @@ if (runTest('Invalid port validation', () => {
   const outputs = [];
   try {
     // Test negative port
-    execSync('node ./bin/run.js navigate https://example.com --port -1 2>&1', { encoding: 'utf8' });
+    execSync('node ../bin/run.js navigate https://example.com --port -1 2>&1', { encoding: 'utf8' });
   } catch (e) {
     outputs.push('negative');
   }
   
   try {
     // Test port too high
-    execSync('node ./bin/run.js navigate https://example.com --port 99999 2>&1', { encoding: 'utf8' });
+    execSync('node ../bin/run.js navigate https://example.com --port 99999 2>&1', { encoding: 'utf8' });
   } catch (e) {
     outputs.push('too-high');
   }
@@ -78,7 +78,7 @@ if (runTest('Invalid port validation', () => {
 // Test 4: Screenshot with invalid path
 if (runTest('Screenshot invalid path handling', () => {
   try {
-    execSync('node ./bin/run.js screenshot /nonexistent/path/file.png --help 2>&1', { encoding: 'utf8' });
+    execSync('node ../bin/run.js screenshot /nonexistent/path/file.png --help 2>&1', { encoding: 'utf8' });
     // Help should work regardless of path
   } catch (e) {
     throw new Error('Should handle help even with invalid paths');
@@ -87,7 +87,7 @@ if (runTest('Screenshot invalid path handling', () => {
 
 // Test 5: Multiple flags combination
 if (runTest('Multiple flags work together', () => {
-  const output = execSync('node ./bin/run.js navigate --help', { encoding: 'utf8' });
+  const output = execSync('node ../bin/run.js navigate --help', { encoding: 'utf8' });
   assert(output.includes('--port'), 'Should have port flag');
   assert(output.includes('--host'), 'Should have host flag');
   assert(output.includes('--launch'), 'Should have launch flag');
@@ -97,22 +97,22 @@ if (runTest('Multiple flags work together', () => {
 // Test 6: JavaScript injection safety
 if (runTest('JavaScript injection safety', () => {
   // Verify evaluate command exists but we can't test actual execution without Chrome
-  const output = execSync('node ./bin/run.js evaluate --help', { encoding: 'utf8' });
+  const output = execSync('node ../bin/run.js evaluate --help', { encoding: 'utf8' });
   assert(output.includes('JavaScript code to execute'), 'Should document JS execution');
 })) passed++; else failed++;
 
 // Test 7: Concurrent command handling
 if (runTest('Commands are isolated', () => {
   // Each command should create its own connection
-  const help1 = execSync('node ./bin/run.js navigate --help', { encoding: 'utf8' });
-  const help2 = execSync('node ./bin/run.js click --help', { encoding: 'utf8' });
+  const help1 = execSync('node ../bin/run.js navigate --help', { encoding: 'utf8' });
+  const help2 = execSync('node ../bin/run.js click --help', { encoding: 'utf8' });
   assert(help1 !== help2, 'Different commands should have different help');
 })) passed++; else failed++;
 
 // Test 8: Error message clarity
 if (runTest('Clear error messages', () => {
   try {
-    execSync('node ./bin/run.js navigate 2>&1', { encoding: 'utf8', stdio: 'pipe' });
+    execSync('node ../bin/run.js navigate 2>&1', { encoding: 'utf8', stdio: 'pipe' });
   } catch (e) {
     // Should have clear error about missing URL
     assert(e.status !== 0, 'Should exit with error');
@@ -122,7 +122,7 @@ if (runTest('Clear error messages', () => {
 // Test 9: File permissions for screenshots
 if (runTest('Screenshot file permissions', () => {
   // Test that screenshot command structure is correct
-  const output = execSync('node ./bin/run.js screenshot --help', { encoding: 'utf8' });
+  const output = execSync('node ../bin/run.js screenshot --help', { encoding: 'utf8' });
   assert(output.includes('--format'), 'Should have format option');
   assert(output.includes('png'), 'Should support PNG');
   assert(output.includes('jpeg'), 'Should support JPEG');
@@ -130,7 +130,7 @@ if (runTest('Screenshot file permissions', () => {
 
 // Test 10: Command aliases and shortcuts
 if (runTest('Flag shortcuts work', () => {
-  const output = execSync('node ./bin/run.js navigate --help', { encoding: 'utf8' });
+  const output = execSync('node ../bin/run.js navigate --help', { encoding: 'utf8' });
   assert(output.includes('-p,'), 'Should have -p shortcut for port');
   assert(output.includes('-h,'), 'Should have -h shortcut for host');
   assert(output.includes('-l,'), 'Should have -l shortcut for launch');

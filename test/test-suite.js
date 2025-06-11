@@ -88,7 +88,7 @@ async function main() {
 
   // Test 1: Help command
   runTest('help command', () => {
-    const output = runCommand('node ./bin/run.js --help');
+    const output = runCommand('node ../bin/run.js --help');
     if (!output.includes('VERSION') || !output.includes('COMMANDS')) {
       throw new Error('Help output missing expected content');
     }
@@ -96,7 +96,7 @@ async function main() {
 
   // Test 2: Navigate command
   runTest('navigate command', () => {
-    const output = runCommand(`node ./bin/run.js navigate ${TEST_URL}`);
+    const output = runCommand(`node ../bin/run.js navigate ${TEST_URL}`);
     if (!output.includes('Successfully navigated')) {
       throw new Error('Navigation did not complete successfully');
     }
@@ -105,7 +105,7 @@ async function main() {
   // Test 3: Screenshot command
   runTest('screenshot command', () => {
     const screenshotPath = 'test-screenshot.png';
-    runCommand(`node ./bin/run.js screenshot ${screenshotPath}`);
+    runCommand(`node ../bin/run.js screenshot ${screenshotPath}`);
     if (!fs.existsSync(screenshotPath)) {
       throw new Error('Screenshot file was not created');
     }
@@ -115,7 +115,7 @@ async function main() {
 
   // Test 4: Evaluate command - get title
   runTest('evaluate command (get title)', () => {
-    const output = runCommand('node ./bin/run.js evaluate "document.title"');
+    const output = runCommand('node ../bin/run.js evaluate "document.title"');
     if (!output.includes('Example Domain')) {
       throw new Error('Did not get expected page title');
     }
@@ -123,7 +123,7 @@ async function main() {
 
   // Test 5: Evaluate command - count elements
   runTest('evaluate command (count links)', () => {
-    const output = runCommand('node ./bin/run.js evaluate "document.querySelectorAll(\'a\').length"');
+    const output = runCommand('node ../bin/run.js evaluate "document.querySelectorAll(\'a\').length"');
     if (!output.includes('Result:')) {
       throw new Error('Evaluate command did not return a result');
     }
@@ -131,23 +131,23 @@ async function main() {
 
   // Test 6: Invalid selector (should fail gracefully)
   runTest('click command with invalid selector', () => {
-    runCommand('node ./bin/run.js click ".non-existent-element" --timeout 1000', true);
+    runCommand('node ../bin/run.js click ".non-existent-element" --timeout 1000', true);
   });
 
   // Test 7: Type command with non-existent input
   runTest('type command with invalid selector', () => {
-    runCommand('node ./bin/run.js type "input.non-existent" "test" --timeout 1000', true);
+    runCommand('node ../bin/run.js type "input.non-existent" "test" --timeout 1000', true);
   });
 
   // Test 8: Navigate to invalid URL
   runTest('navigate to invalid URL', () => {
-    runCommand('node ./bin/run.js navigate "not-a-valid-url"', true);
+    runCommand('node ../bin/run.js navigate "not-a-valid-url"', true);
   });
 
   // Test 9: Full page screenshot
   runTest('full page screenshot', () => {
     const screenshotPath = 'test-fullpage.png';
-    runCommand(`node ./bin/run.js screenshot ${screenshotPath} --full-page`);
+    runCommand(`node ../bin/run.js screenshot ${screenshotPath} --full-page`);
     if (!fs.existsSync(screenshotPath)) {
       throw new Error('Full page screenshot file was not created');
     }
@@ -157,8 +157,8 @@ async function main() {
 
   // Test 10: Multiple commands in sequence
   runTest('command sequence', () => {
-    runCommand(`node ./bin/run.js navigate ${TEST_URL}`);
-    const output = runCommand('node ./bin/run.js evaluate "window.location.href"');
+    runCommand(`node ../bin/run.js navigate ${TEST_URL}`);
+    const output = runCommand('node ../bin/run.js evaluate "window.location.href"');
     if (!output.includes('example.com')) {
       throw new Error('Sequential commands did not maintain state');
     }
