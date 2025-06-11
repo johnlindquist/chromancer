@@ -5,9 +5,10 @@ export default class Navigate extends BaseCommand {
   static description = 'Navigate to a URL in Chrome'
 
   static examples = [
-    '<%= config.bin %> <%= command.id %> https://example.com',
+    '<%= config.bin %> <%= command.id %> example.com',
+    '<%= config.bin %> <%= command.id %> google.com',
     '<%= config.bin %> <%= command.id %> https://example.com --wait-until networkidle',
-    '<%= config.bin %> <%= command.id %> https://example.com --profile personal',
+    '<%= config.bin %> <%= command.id %> github.com --profile work',
   ]
 
   static flags = {
@@ -52,16 +53,29 @@ export default class Navigate extends BaseCommand {
       this.setupVerbosePageListeners()
     }
 
+    // Normalize URL - add protocol if missing
+    let normalizedUrl = args.url
+    if (!normalizedUrl.match(/^https?:\/\//i)) {
+      // Check if it looks like a local file path
+      if (normalizedUrl.startsWith('/') || normalizedUrl.startsWith('./') || normalizedUrl.match(/^[A-Za-z]:\\/)) {
+        normalizedUrl = `file://${normalizedUrl}`
+      } else {
+        // Assume it's a domain name
+        normalizedUrl = `https://${normalizedUrl}`
+      }
+      this.logVerbose(`Normalized URL from "${args.url}" to "${normalizedUrl}"`)
+    }
+
     try {
-      this.log(`🌐 Navigating to ${args.url}...`)
+      this.log(`🌐 Navigating to ${normalizedUrl}...`)
       this.logVerbose('Navigation options', {
-        url: args.url,
+        url: normalizedUrl,
         waitUntil: flags['wait-until'],
         timeout: flags.timeout,
       })
 
       const startTime = Date.now()
-      const response = await this.page!.goto(args.url, {
+      const response = await this.page!.goto(normalizedUrl, {
         waitUntil: flags['wait-until'] as any,
         timeout: flags.timeout,
       })
@@ -70,7 +84,7 @@ export default class Navigate extends BaseCommand {
       
       if (response) {
         const status = response.status()
-        this.log(`✅ Navigated to ${args.url} (${status} - ${loadTime}ms)`)
+        this.log(`✅ Navigated to ${normalizedUrl} (${status} - ${loadTime}ms)`)
         
         if (flags.verbose) {
           const metrics = await this.page!.evaluate(() => {
@@ -86,7 +100,7 @@ export default class Navigate extends BaseCommand {
           this.logVerbose('Performance metrics', metrics)
         }
       } else {
-        this.log(`✅ Navigated to ${args.url} (${loadTime}ms)`)
+        this.log(`✅ Navigated to ${normalizedUrl} (${loadTime}ms)`)
       }
 
       // Get final page info
@@ -97,12 +111,12 @@ export default class Navigate extends BaseCommand {
         this.log(`📄 Page title: "${title}"`)
       }
       
-      if (finalUrl !== args.url) {
+      if (finalUrl !== normalizedUrl && finalUrl !== args.url) {
         this.log(`🔀 Final URL: ${finalUrl}`)
       }
     } catch (error: any) {
       if (error.name === 'TimeoutError') {
-        this.error(`Navigation timeout: Failed to navigate to ${args.url} within ${flags.timeout}ms`)
+        this.error(`Navigation timeout: Failed to navigate to ${normalizedUrl} within ${flags.timeout}ms`)
       }
       this.error(`Navigation failed: ${error.message}`)
     }
