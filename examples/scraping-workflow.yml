@@ -1,0 +1,27 @@
+# Example workflow for web scraping
+# Run with: chromancer run examples/scraping-workflow.yml
+
+- navigate: https://news.ycombinator.com
+
+- wait:
+    selector: .itemlist
+    state: visible
+    
+- evaluate: |
+    // Extract top 5 stories
+    Array.from(document.querySelectorAll('.athing')).slice(0, 5).map(item => ({
+      title: item.querySelector('.titleline a').textContent,
+      link: item.querySelector('.titleline a').href,
+      rank: item.querySelector('.rank').textContent
+    }))
+    
+- screenshot:
+    path: hackernews.png
+    fullPage: false
+    
+- scroll: bottom
+
+- wait: 
+    time: 1000
+    
+- scroll: top

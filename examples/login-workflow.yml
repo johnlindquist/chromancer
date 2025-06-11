@@ -1,0 +1,23 @@
+# Example workflow for logging into a website
+# Run with: chromancer run examples/login-workflow.yml --var USER=myusername --var PASS=mypassword
+
+- navigate: https://github.com/login
+- wait:
+    selector: input[name="login"]
+    timeout: 10000
+    
+- type:
+    selector: input[name="login"]
+    text: ${USER}
+    
+- type:
+    selector: input[name="password"]
+    text: ${PASS}
+    
+- click: input[type="submit"]
+
+- wait:
+    url: https://github.com
+    timeout: 15000
+    
+- screenshot: logged-in.png

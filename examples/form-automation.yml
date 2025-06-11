@@ -1,0 +1,40 @@
+# Example workflow for form automation
+# Run with: chromancer run examples/form-automation.yml --continue-on-error
+
+- navigate: file:///tmp/test-form.html
+
+# Create a test form first
+- evaluate: |
+    document.body.innerHTML = `
+      <form id="contact-form">
+        <h2>Contact Form</h2>
+        <input type="text" name="name" placeholder="Your Name" required>
+        <input type="email" name="email" placeholder="Your Email" required>
+        <select name="subject">
+          <option value="">Select Subject</option>
+          <option value="general">General Inquiry</option>
+          <option value="support">Support</option>
+          <option value="feedback">Feedback</option>
+        </select>
+        <textarea name="message" placeholder="Your Message" rows="5"></textarea>
+        <button type="submit">Send Message</button>
+      </form>
+    `
+
+- wait:
+    selector: #contact-form
+    
+- fill:
+    form:
+      name: John Doe
+      email: john@example.com
+      message: This is an automated test message
+
+- select:
+    selector: select[name="subject"]
+    value: feedback
+    
+- screenshot: form-filled.png
+
+# Uncomment to submit
+# - click: button[type="submit"]

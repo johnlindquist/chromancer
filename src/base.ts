@@ -3,6 +3,7 @@ import { chromium, Browser, Page, BrowserContext } from 'playwright'
 import { SessionManager } from './session.js'
 import * as path from 'path'
 import * as os from 'os'
+import { displayErrorWithTip, enhanceError } from './utils/error-tips.js'
 
 export abstract class BaseCommand extends Command {
   static baseFlags = {
@@ -213,6 +214,32 @@ Possible solutions:
         this.error('Timeout waiting for login (5 minutes)')
       }
       throw error
+    }
+  }
+
+  /**
+   * Enhanced error handler
+   */
+  protected handleError(error: Error | string): never {
+    const err = typeof error === 'string' ? new Error(error) : error
+    
+    // Display error with tips if not in JSON mode
+    if (!this.jsonEnabled()) {
+      displayErrorWithTip(err, this.constructor.name.toLowerCase())
+    }
+    
+    // Call parent error method
+    this.exit(1)
+  }
+
+  /**
+   * Log error with tips but don't exit
+   */
+  protected logError(error: Error, command?: string): void {
+    if (!this.jsonEnabled()) {
+      displayErrorWithTip(error, command || this.constructor.name.toLowerCase())
+    } else {
+      this.logToStderr(error.message)
     }
   }
 
