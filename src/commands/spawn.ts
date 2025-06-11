@@ -107,6 +107,11 @@ export default class Spawn extends Command {
         '--no-default-browser-check',
       ]
       
+      // Add container-specific flags if needed
+      if (process.env.DEVCONTAINER === 'true' || process.env.CHROME_FLAGS) {
+        chromeArgs.push('--no-sandbox', '--disable-dev-shm-usage')
+      }
+      
       if (flags.headless) {
         chromeArgs.push('--headless')
       }
@@ -275,7 +280,25 @@ export default class Spawn extends Command {
           }
         }
       } else {
-        // Linux - try which command
+        // Linux - check common paths first
+        const linuxPaths = [
+          '/usr/bin/google-chrome-stable',
+          '/usr/bin/google-chrome',
+          '/usr/bin/chromium-browser',
+          '/usr/bin/chromium',
+          '/snap/bin/chromium',
+        ]
+        
+        for (const chromePath of linuxPaths) {
+          try {
+            execSync(`test -f "${chromePath}"`, { stdio: 'ignore' })
+            return chromePath
+          } catch {
+            // Continue checking
+          }
+        }
+        
+        // Fall back to which command
         for (const exe of executables) {
           try {
             const result = execSync(`which ${exe} 2>/dev/null`, { encoding: 'utf8' }).trim()

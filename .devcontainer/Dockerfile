@@ -19,7 +19,20 @@ RUN apt update && apt install -y less \
   iproute2 \
   dnsutils \
   aggregate \
-  jq
+  jq \
+  wget \
+  ca-certificates
+
+# Install Chrome/Chromium
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - && \
+  echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list && \
+  apt update && \
+  apt install -y google-chrome-stable && \
+  rm -rf /var/lib/apt/lists/*
+
+# Set Chrome to run without sandbox in container
+ENV CHROME_BIN=/usr/bin/google-chrome-stable
+ENV CHROME_FLAGS="--no-sandbox --disable-dev-shm-usage"
 
 # Ensure default node user has access to /usr/local/share
 RUN mkdir -p /usr/local/share/npm-global && \

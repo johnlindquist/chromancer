@@ -155,6 +155,11 @@ export abstract class BaseCommand extends Command {
             channel: 'chrome',
           }
           
+          // Add container-specific flags if needed
+          if (process.env.DEVCONTAINER === 'true' || process.env.CHROME_FLAGS) {
+            launchOptions.args.push('--no-sandbox', '--disable-dev-shm-usage')
+          }
+          
           // Add profile support
           if (profile) {
             const profilePath = this.getProfilePath(profile)
