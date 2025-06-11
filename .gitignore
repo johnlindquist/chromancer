@@ -43,6 +43,21 @@ coverage/
 *.jpg
 *.jpeg
 
+# Documentation notes and summaries
+COMMANDS.md
+ENHANCED_FEATURES.md
+NEW_FEATURES*.md
+PACKAGE_SUMMARY.md
+PROPOSED_FEATURES.md
+REFACTORING_SUMMARY.md
+TEST_SUMMARY.md
+TESTING.md
+UX_IMPROVEMENTS.md
+
+# Generated files
+repomix-output.xml
+test.log
+
 # Temporary files
 tmp/
 temp/

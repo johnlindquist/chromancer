@@ -6,7 +6,7 @@ import * as os from 'os'
 import { SessionManager } from '../session.js'
 
 export default class Spawn extends Command {
-  static description = 'Spawn a Chrome browser instance with remote debugging'
+  static description = 'Launch Chrome with remote debugging enabled using Playwright for reliable automation - supports auto-launch, profiles, and headless mode'
 
   static examples = [
     '<%= config.bin %> <%= command.id %> https://example.com',

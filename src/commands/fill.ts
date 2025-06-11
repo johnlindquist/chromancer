@@ -8,7 +8,7 @@ interface FormData {
 }
 
 export default class Fill extends BaseCommand {
-  static description = 'Fill form fields automatically'
+  static description = 'Intelligently fill forms with auto-generated test data, JSON input, or smart field detection - handles all input types with submit support'
 
   static examples = [
     '<%= config.bin %> <%= command.id %> --data \'{"username": "john", "email": "john@example.com"}\'',

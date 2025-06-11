@@ -17,7 +17,7 @@ interface NetworkLog {
 }
 
 export default class Network extends BaseCommand {
-  static description = 'Monitor network requests and responses'
+  static description = 'Advanced network monitoring with request filtering, response capture, performance analysis, and request blocking - debug API calls in real-time'
 
   static examples = [
     '<%= config.bin %> <%= command.id %> --filter "api"',

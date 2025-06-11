@@ -4,7 +4,7 @@ import { BaseCommand } from '../base.js'
 import { promises as fs } from 'fs'
 
 export default class Cookies extends BaseCommand {
-  static description = 'Manage browser cookies'
+  static description = 'Complete cookie management - save/load sessions, inspect values, set custom cookies, and maintain authenticated states across runs'
 
   static examples = [
     '<%= config.bin %> <%= command.id %> list',

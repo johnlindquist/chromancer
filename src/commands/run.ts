@@ -25,7 +25,7 @@ interface WorkflowOptions {
 
 export default class Run extends BaseCommand {
   private parsedFlags: any
-  static description = 'Run a workflow from a YAML file or stdin'
+  static description = 'Execute powerful YAML workflows with variables, conditional logic, and error handling - automate complex multi-step browser operations'
 
   static examples = [
     '<%= config.bin %> <%= command.id %> workflow.yml',

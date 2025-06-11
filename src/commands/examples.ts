@@ -17,7 +17,7 @@ interface Example {
 }
 
 export default class Examples extends Command {
-  static description = 'Show example recipes for common tasks'
+  static description = 'Browse categorized example recipes for login flows, web scraping, testing, form automation, and monitoring - learn by example with ready-to-use snippets'
 
   static examples = [
     '<%= config.bin %> <%= command.id %>',

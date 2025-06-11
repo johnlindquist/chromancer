@@ -1,7 +1,7 @@
 {
   "name": "chromancer",
   "version": "1.0.0",
-  "description": "Command-line interface for Chrome automation using DevTools Protocol",
+  "description": "A powerful command-line interface for automating Chrome browser using Playwright. Perfect for web scraping, automation, testing, and browser workflows.",
   "main": "dist/index.js",
   "bin": {
     "chromancer": "./bin/run.js"
@@ -50,7 +50,7 @@
     "@types/node": "^22.15.29",
     "chalk": "^5.4.1",
     "clipboardy": "^2.3.0",
-    "inquirer": "^8.2.6",
+    "inquirer": "^9.1.0",
     "inquirer-autocomplete-prompt": "^3.0.1",
     "oclif": "^4.18.0",
     "playwright": "^1.52.0",

@@ -12,7 +12,7 @@ const chalk = {
 }
 
 export default class Quick extends BaseCommand {
-  static description = 'Quick commands for common tasks'
+  static description = 'Perform comprehensive site testing, capture screenshots, extract data, and run accessibility checks - all with single commands'
 
   static examples = [
     '<%= config.bin %> <%= command.id %> check example.com',

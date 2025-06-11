@@ -12,7 +12,7 @@ interface RecordedAction {
 }
 
 export default class Record extends BaseCommand {
-  static description = 'Record user interactions and generate a script'
+  static description = 'Record browser interactions and generate reusable automation scripts in JSON or JavaScript - perfect for creating test scenarios'
 
   static examples = [
     '<%= config.bin %> <%= command.id %> --output recording.json',

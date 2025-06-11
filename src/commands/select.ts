@@ -1,6 +1,5 @@
 import { Args, Flags } from '@oclif/core'
 import { BaseCommand } from '../base.js'
-import * as inquirer from 'inquirer'
 import * as clipboardy from 'clipboardy'
 
 export default class Select extends BaseCommand {
@@ -205,7 +204,8 @@ export default class Select extends BaseCommand {
           }
         })
         
-        const { selectedSelector } = await inquirer.prompt([
+        const inquirer = await import('inquirer')
+        const { selectedSelector } = await inquirer.default.prompt([
           {
             type: 'list',
             name: 'selectedSelector',

@@ -14,7 +14,7 @@ const chalk = {
 }
 
 export default class Init extends BaseCommand {
-  static description = 'Initialize chromancer and set up your environment'
+  static description = 'Interactive setup wizard - checks Chrome connectivity, creates configuration files, and generates example workflows to get started quickly'
 
   static examples = [
     '<%= config.bin %> <%= command.id %>',

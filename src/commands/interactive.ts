@@ -12,7 +12,7 @@ interface CommandHistory {
 }
 
 export default class Interactive extends BaseCommand {
-  static description = 'Start an interactive CDP session with command completion and history'
+  static description = 'Launch an interactive REPL with command history, tab completion, and real-time browser control - explore pages interactively with full CDP access'
 
   static examples = [
     '<%= config.bin %> <%= command.id %>',
