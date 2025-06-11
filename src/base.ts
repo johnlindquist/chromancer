@@ -4,6 +4,7 @@ import { SessionManager } from './session.js'
 import * as path from 'path'
 import * as os from 'os'
 import { displayErrorWithTip, enhanceError } from './utils/error-tips.js'
+import { scanForChromeInstances } from './utils/chrome-scanner.js'
 
 export abstract class BaseCommand extends Command {
   static baseFlags = {
@@ -112,6 +113,34 @@ export abstract class BaseCommand extends Command {
       this.log(`❌ No existing Chrome instance found at ${browserURL}`)
       this.logVerbose('Connection failed', { error: connectError.message })
       
+      // Scan for Chrome instances on other ports
+      this.log(`🔍 Scanning for Chrome instances on other ports...`)
+      const instances = await scanForChromeInstances(host)
+      
+      if (instances.length > 0) {
+        this.log(`\n✨ Found Chrome instance(s) on different port(s):`)
+        for (const instance of instances) {
+          this.log(`   Port ${instance.port}: ${instance.version?.Browser || 'Chrome'}`)
+        }
+        
+        // Try to connect to the first found instance
+        const firstInstance = instances[0]
+        this.log(`\n🔄 Attempting to connect to Chrome on port ${firstInstance.port}...`)
+        
+        try {
+          this.browser = await chromium.connectOverCDP(`http://${host}:${firstInstance.port}`)
+          this.context = this.browser.contexts()[0]
+          
+          this.log(`✅ Connected to Chrome on port ${firstInstance.port}`)
+          this.log(`💡 To use this port by default, add --port ${firstInstance.port}`)
+          
+          // Success! We connected to a different port
+          return
+        } catch (altConnectError: any) {
+          this.log(`❌ Failed to connect to Chrome on port ${firstInstance.port}`)
+        }
+      }
+      
       if (launch) {
         try {
           this.log('🚀 Launching new Chrome instance...')
@@ -147,8 +176,9 @@ export abstract class BaseCommand extends Command {
 
 Possible solutions:
 1. Use --launch flag to start a new Chrome instance
-2. Use 'chromancer spawn' to start a persistent Chrome instance
-3. Start Chrome manually with: chrome --remote-debugging-port=${port}`)
+2. Use 'chromancer spawn --no-profile' to avoid profile picker
+3. Use 'chromancer spawn --profile NAME' for a specific profile
+4. Start Chrome manually with: chrome --remote-debugging-port=${port}`)
       }
     }
 

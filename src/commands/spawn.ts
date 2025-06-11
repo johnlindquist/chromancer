@@ -4,16 +4,18 @@ import * as path from 'path'
 import * as os from 'os'
 import { spawn, execSync } from 'child_process'
 import { SessionManager } from '../session.js'
+import { scanForChromeInstances, waitForChromeReady, findAvailablePort } from '../utils/chrome-scanner.js'
 
 export default class Spawn extends Command {
   static description = 'Launch Chrome with remote debugging enabled using Playwright for reliable automation - supports auto-launch, profiles, and headless mode'
 
   static examples = [
-    '<%= config.bin %> <%= command.id %> https://example.com',
-    '<%= config.bin %> <%= command.id %> https://example.com --port 9223',
-    '<%= config.bin %> <%= command.id %> https://example.com --headless',
-    '<%= config.bin %> <%= command.id %> --profile work  # Opens with work profile',
-    '<%= config.bin %> <%= command.id %> --headless  # Opens about:blank in headless mode',
+    '<%= config.bin %> <%= command.id %>',
+    '<%= config.bin %> <%= command.id %> --no-profile  # Skip profile picker',
+    '<%= config.bin %> <%= command.id %> --profile work  # Use specific profile',
+    '<%= config.bin %> <%= command.id %> --port 9223  # Use different port',
+    '<%= config.bin %> <%= command.id %> --headless  # Headless mode',
+    '<%= config.bin %> <%= command.id %> https://example.com  # Open specific URL',
   ]
 
   static flags = {
@@ -28,6 +30,15 @@ export default class Spawn extends Command {
     }),
     profile: Flags.string({
       description: 'Chrome profile name or path to use',
+    }),
+    'no-profile': Flags.boolean({
+      description: 'Launch Chrome without any profile (incognito-like)',
+      default: false,
+    }),
+    'wait-for-ready': Flags.boolean({
+      description: 'Wait for Chrome to be fully ready before returning',
+      default: true,
+      allowNo: true,
     }),
   }
 
@@ -64,12 +75,20 @@ export default class Spawn extends Command {
     const { args, flags } = await this.parse(Spawn)
     
     try {
-      // Check if Chrome is already running on this port
-      const isPortInUse = await this.checkPort(flags.port)
-      if (isPortInUse) {
-        this.log(`⚠️  Chrome is already running on port ${flags.port}`)
-        this.log(`💡 Use 'chromancer stop' to close it first, or use a different port with --port`)
-        return
+      // First, scan for any existing Chrome instances
+      const existingInstances = await scanForChromeInstances()
+      if (existingInstances.length > 0) {
+        this.log(`🔍 Found existing Chrome instance(s):`)
+        for (const instance of existingInstances) {
+          this.log(`   Port ${instance.port}: ${instance.version?.Browser || 'Chrome'}`)
+        }
+        
+        // Check if our target port is already in use
+        if (existingInstances.some(i => i.port === flags.port)) {
+          this.log(`\n⚠️  Chrome is already running on port ${flags.port}`)
+          this.log(`💡 Use 'chromancer stop' to close it first, or use a different port with --port`)
+          return
+        }
       }
       
       this.log(`🚀 Launching Chrome with remote debugging on port ${flags.port}...`)
@@ -93,10 +112,19 @@ export default class Spawn extends Command {
         chromeArgs.push('--headless')
       }
       
-      if (flags.profile) {
+      if (flags.profile && !flags['no-profile']) {
         const profilePath = this.getProfilePath(flags.profile)
         this.log(`📁 Using Chrome profile: ${profilePath}`)
         chromeArgs.push(`--user-data-dir=${profilePath}`)
+      } else if (flags['no-profile']) {
+        // Launch with a temporary profile to avoid profile picker
+        const tempDir = path.join(os.tmpdir(), `chromancer-temp-${Date.now()}`)
+        chromeArgs.push(`--user-data-dir=${tempDir}`)
+        this.log(`🔒 Using temporary profile (no saved data)`)
+      } else {
+        // Default Chrome profile - this might show profile picker
+        this.log(`⚠️  Using default Chrome profile (may show profile picker)`)
+        this.log(`💡 Use --no-profile to skip profile picker`)
       }
       
       // Add the URL if provided
@@ -128,25 +156,30 @@ export default class Spawn extends Command {
         url: args.url,
       })
       
-      // Wait a moment for Chrome to start and then verify
+      // Wait for Chrome to be ready if requested
       let chromeStarted = false
-      const maxRetries = 5
       
-      for (let i = 0; i < maxRetries; i++) {
-        await new Promise(resolve => setTimeout(resolve, 1000))
+      if (flags['wait-for-ready']) {
+        this.log(`⏳ Waiting for Chrome to be ready...`)
+        chromeStarted = await waitForChromeReady(flags.port, 'localhost', 10, 1000)
         
-        try {
-          const response = await fetch(`http://localhost:${flags.port}/json/version`)
-          if (response.ok) {
-            chromeStarted = true
-            break
-          }
-        } catch (error) {
-          // Chrome not ready yet, continue waiting
-          if (i < maxRetries - 1) {
-            this.log(`⏳ Waiting for Chrome to start... (${i + 1}/${maxRetries})`)
+        if (!chromeStarted) {
+          // Try scanning for Chrome on other ports in case profile picker changed the port
+          this.log(`🔍 Scanning for Chrome instances...`)
+          const instances = await scanForChromeInstances()
+          
+          if (instances.length > 0) {
+            this.log(`\n⚠️  Chrome may have started on a different port:`)
+            for (const instance of instances) {
+              this.log(`   Port ${instance.port}: ${instance.version?.Browser || 'Chrome'}`)
+            }
+            this.log(`\n💡 Try connecting with: chromancer navigate example.com --port ${instances[0].port}`)
+            return
           }
         }
+      } else {
+        // Don't wait, just return immediately
+        this.log(`🚀 Chrome launching in background (not waiting for ready state)`)
       }
       
       if (chromeStarted) {
