@@ -2,6 +2,8 @@ import { Page } from 'playwright';
 import type { WorkflowStepResult, WorkflowExecutionResult } from '../types/workflow.js';
 import * as yaml from 'yaml';
 import { DataFormatter } from './data-formatter.js';
+import { RunLogManager } from './run-log.js';
+import { DOMDigest } from './dom-digest.js';
 
 interface WorkflowStep {
   [command: string]: any;

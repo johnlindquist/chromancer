@@ -1,4 +1,6 @@
 import { Page } from 'playwright';
+import { DOMDigestCollector, DOMDigest } from './dom-digest.js';
+import { SelectorRanker } from './selector-ranker.js';
 
 export interface DOMInspectionResult {
   selectors: {
@@ -13,13 +15,18 @@ export interface DOMInspectionResult {
     inputs: { type: string; name?: string; placeholder?: string; selector: string }[];
   };
   suggestions: string[];
+  digest?: DOMDigest;
 }
 
 export class DOMInspector {
   private page: Page;
+  private digestCollector: DOMDigestCollector;
+  private selectorRanker: SelectorRanker;
 
   constructor(page: Page) {
     this.page = page;
+    this.digestCollector = new DOMDigestCollector(page);
+    this.selectorRanker = new SelectorRanker(page);
   }
 
   async inspectForDataExtraction(targetDescription: string): Promise<DOMInspectionResult> {
@@ -220,6 +227,25 @@ export class DOMInspector {
     }
 
     return results.sort((a, b) => b.count - a.count);
+  }
+
+  async inspectWithDigest(targetDescription: string): Promise<DOMInspectionResult> {
+    // Collect digest first
+    const digest = await this.digestCollector.collect();
+    
+    // Run normal inspection
+    const result = await this.inspectForDataExtraction(targetDescription);
+    
+    // Add digest to result
+    result.digest = digest;
+    
+    // Rank the common selectors
+    if (result.selectors.common.length > 0) {
+      const ranked = await this.selectorRanker.rankSelectors(result.selectors.common);
+      result.selectors.common = ranked.map(r => r.selector);
+    }
+    
+    return result;
   }
 
   async suggestSelectorsForExtraction(description: string): Promise<string[]> {

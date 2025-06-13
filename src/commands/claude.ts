@@ -4,6 +4,8 @@ import { askClaude } from "../utils/claude.js"
 import { WorkflowExecutor } from "../utils/workflow-executor.js"
 import { WorkflowStorage } from "../utils/workflow-storage.js"
 import { DOMInspector } from "../utils/dom-inspector.js"
+import { RunLogManager } from "../utils/run-log.js"
+import { DOMDigestCollector } from "../utils/dom-digest.js"
 import * as yaml from "yaml"
 import inquirer from "inquirer"
 import type { WorkflowExecutionResult } from "../types/workflow.js"
@@ -13,6 +15,7 @@ interface WorkflowAttempt {
   yaml: string
   result?: WorkflowExecutionResult
   claudeAnalysis?: string
+  runLogId?: string
 }
 
 interface VerificationResult {
@@ -23,6 +26,9 @@ interface VerificationResult {
 }
 
 export default class Claude extends BaseCommand {
+  private runLogManager: RunLogManager
+  private digestCollector?: DOMDigestCollector
+  
   static description =
     "Natural-language agent powered by Claude - turns English into Chromancer workflows with intelligent feedback loop"
 
@@ -63,6 +69,11 @@ export default class Claude extends BaseCommand {
 
   private storage = new WorkflowStorage()
   private attempts: WorkflowAttempt[] = []
+  
+  constructor(argv: string[], config: any) {
+    super(argv, config)
+    this.runLogManager = new RunLogManager()
+  }
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(Claude)
@@ -72,8 +83,25 @@ export default class Claude extends BaseCommand {
   }
 
   private async attemptWorkflow(instruction: string, flags: any, previousAttempts?: WorkflowAttempt[]): Promise<void> {
+    // Collect DOM digest if we're already connected and have failures
+    let domDigest: string | undefined
+    if (this.page && previousAttempts && previousAttempts.length > 0) {
+      const lastAttempt = previousAttempts[previousAttempts.length - 1]
+      if (lastAttempt.result && this.hasEmptyDataExtraction(lastAttempt.result)) {
+        try {
+          if (!this.digestCollector) {
+            this.digestCollector = new DOMDigestCollector(this.page)
+          }
+          const digest = await this.digestCollector.collect()
+          domDigest = this.digestCollector.formatForClaude(digest)
+        } catch (error) {
+          // Ignore digest collection errors
+        }
+      }
+    }
+    
     // Build system prompt with context from previous attempts
-    const systemPrompt = this.buildSystemPrompt(previousAttempts)
+    const systemPrompt = this.buildSystemPrompt(previousAttempts, domDigest)
     const fullPrompt = `${systemPrompt}\n\nUser instruction: ${instruction}`
 
     this.log("🤖 Asking Claude...")
@@ -131,7 +159,7 @@ export default class Claude extends BaseCommand {
     }
   }
 
-  private buildSystemPrompt(previousAttempts?: WorkflowAttempt[]): string {
+  private buildSystemPrompt(previousAttempts?: WorkflowAttempt[], domDigest?: string): string {
     let prompt = `You are an expert Chromancer automation engineer. Convert the user's natural language instruction into a valid YAML workflow.
 
 OUTPUT RULES:
@@ -203,9 +231,14 @@ IMPORTANT: Your output must be valid YAML that starts with a dash (-) for each s
       const lastAttempt = previousAttempts[previousAttempts.length - 1];
       if (lastAttempt?.result && this.hasEmptyDataExtraction(lastAttempt.result)) {
         prompt += `\n\nIMPORTANT: The previous attempt failed to extract any data. 
-The selectors used did not match any elements on the page. 
-Based on the DOM analysis, try using more generic selectors or the suggested patterns.
+The selectors used did not match any elements on the page.`
+        
+        if (domDigest) {
+          prompt += `\n\nCURRENT PAGE STRUCTURE:\n${domDigest}\n\nUse the patterns shown above to create working selectors.`
+        } else {
+          prompt += `\nBased on the DOM analysis, try using more generic selectors or the suggested patterns.
 Consider using broader selectors first to test, then narrow down.`
+        }
       }
     }
 
@@ -287,6 +320,11 @@ Consider using broader selectors first to test, then narrow down.`
       this.error('Failed to connect to Chrome')
     }
 
+    // Initialize digest collector if needed
+    if (!this.digestCollector) {
+      this.digestCollector = new DOMDigestCollector(this.page!)
+    }
+
     // Parse workflow
     const workflow = yaml.parse(yamlText)
     
@@ -296,6 +334,28 @@ Consider using broader selectors first to test, then narrow down.`
       strict: false, // Don't stop on errors, we want to see all results
       captureOutput: true
     })
+
+    // Create run log
+    try {
+      await this.runLogManager.init()
+      const currentUrl = await this.page!.url()
+      const digest = await this.digestCollector.collect()
+      
+      const runLog = await this.runLogManager.createRunLog(result, {
+        url: currentUrl,
+        domDigest: digest
+      })
+      
+      // Store run log ID in the current attempt
+      if (this.attempts.length > 0) {
+        this.attempts[this.attempts.length - 1].runLogId = runLog.id
+      }
+    } catch (error) {
+      // Log creation failure shouldn't break the workflow
+      if (flags.verbose) {
+        this.warn(`Failed to create run log: ${error}`)
+      }
+    }
 
     return result
   }
@@ -529,13 +589,30 @@ Consider using broader selectors first to test, then narrow down.`
     if (isDataExtraction && hasEmptyData && this.page) {
       this.log("\n🔍 Inspecting page structure to find better selectors...");
       const inspector = new DOMInspector(this.page);
-      const inspection = await inspector.inspectForDataExtraction(instruction);
+      const inspection = await inspector.inspectWithDigest(instruction);
+      
+      // Format digest for Claude if available
+      let digestInfo = '';
+      if (inspection.digest) {
+        digestInfo = `
+URL: ${inspection.digest.url}
+Title: ${inspection.digest.title}
+
+Top Patterns (by frequency):
+${inspection.digest.patterns.slice(0, 10).map(p => `  ${p.selector} (${p.count} elements)`).join('\n')}
+
+Sample Text Content:
+${inspection.digest.texts.slice(0, 10).map(t => `  "${t}"`).join('\n')}
+`;
+      }
       
       domAnalysis = `
 DOM INSPECTION RESULTS:
 - Found ${inspection.selectors.common.length} repeated element patterns
 - Most common pattern: ${inspection.selectors.common[0] || 'none found'}
 - Page has ${inspection.structure.headings.length} headings, ${inspection.structure.links.length} links
+
+${digestInfo}
 
 Suggestions:
 ${inspection.suggestions.join('\n')}
