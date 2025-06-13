@@ -28,7 +28,7 @@ interface VerificationResult {
 export default class Claude extends BaseCommand {
   private runLogManager: RunLogManager
   private digestCollector?: DOMDigestCollector
-  
+
   static description =
     "Natural-language agent powered by Claude - turns English into Chromancer workflows with intelligent feedback loop"
 
@@ -65,7 +65,7 @@ export default class Claude extends BaseCommand {
 
   private storage = new WorkflowStorage()
   private attempts: WorkflowAttempt[] = []
-  
+
   constructor(argv: string[], config: any) {
     super(argv, config)
     this.runLogManager = new RunLogManager()
@@ -95,21 +95,21 @@ export default class Claude extends BaseCommand {
         }
       }
     }
-    
+
     // Build system prompt with context from previous attempts
     const systemPrompt = this.buildSystemPrompt(previousAttempts, domDigest)
-    
+
     // Structure the instruction based on whether this is a retry
     let structuredInstruction = ''
     if (previousAttempts && previousAttempts.length > 0) {
       // Extract original instruction from the first attempt
       const originalInstruction = previousAttempts[0].prompt
-      
+
       // Check if current instruction is different (has been appended/modified)
       if (instruction !== originalInstruction) {
         // Extract the follow-up part
         const followUpPart = instruction.replace(originalInstruction, '').replace(/^[.\s]+/, '')
-        
+
         structuredInstruction = `<original-instruction>
 ${originalInstruction}
 </original-instruction>
@@ -125,15 +125,15 @@ Note: The original instruction failed. The user has provided additional clarific
     } else {
       structuredInstruction = `User instruction: ${instruction}`
     }
-    
+
     const fullPrompt = `${systemPrompt}\n\n${structuredInstruction}`
 
     this.log("🤖 Asking Claude...")
-    
+
     try {
       const raw = await askClaude(fullPrompt)
       const yamlText = this.cleanYamlOutput(raw)
-      
+
       // Validate YAML
       this.validateYaml(yamlText)
 
@@ -147,7 +147,7 @@ Note: The original instruction failed. The user has provided additional clarific
 
       // Execute workflow
       const result = await this.executeWorkflow(yamlText, flags, instruction)
-      
+
       // Store this attempt
       const attempt: WorkflowAttempt = {
         prompt: instruction,
@@ -162,11 +162,11 @@ Note: The original instruction failed. The user has provided additional clarific
       // If interactive mode, always verify results with Claude
       if (flags.interactive) {
         const verification = await this.verifyResults(instruction, attempt, result)
-        
+
         // Show verification to user
         this.log("\n🔍 AI Verification:")
         this.log(verification.analysis)
-        
+
         // Handle next steps based on verification
         if (verification.success) {
           this.log("\n✅ " + verification.reason)
@@ -249,11 +249,11 @@ INSTRUCTION HANDLING:
     // Add context from previous attempts
     if (previousAttempts && previousAttempts.length > 0) {
       prompt += "\n\nPREVIOUS ATTEMPTS AND RESULTS:"
-      
+
       previousAttempts.forEach((attempt, index) => {
         prompt += `\n\nAttempt ${index + 1}:\n`
         prompt += `YAML:\n${attempt.yaml}\n`
-        
+
         if (attempt.result) {
           prompt += WorkflowExecutor.formatResultsForAnalysis(
             attempt.result,
@@ -261,20 +261,20 @@ INSTRUCTION HANDLING:
             attempt.yaml
           )
         }
-        
+
         if (attempt.claudeAnalysis) {
           prompt += `\nAnalysis: ${attempt.claudeAnalysis}`
         }
       })
 
       prompt += "\n\nBased on the previous attempts, generate an improved workflow that addresses the issues."
-      
+
       // Add specific guidance for data extraction failures
       const lastAttempt = previousAttempts[previousAttempts.length - 1];
       if (lastAttempt?.result && this.hasEmptyDataExtraction(lastAttempt.result)) {
         prompt += `\n\nIMPORTANT: The previous attempt failed to extract any data. 
 The selectors used did not match any elements on the page.`
-        
+
         if (domDigest) {
           prompt += `\n\nCURRENT PAGE STRUCTURE:\n${domDigest}\n\nUse the patterns shown above to create working selectors.`
         } else {
@@ -293,25 +293,25 @@ Consider using broader selectors first to test, then narrow down.`
       .replace(/```ya?ml/gi, "")
       .replace(/```/g, "")
       .trim()
-    
+
     // Find where the YAML actually starts (first line starting with -)
     const lines = cleaned.split('\n')
     const yamlStartIndex = lines.findIndex(line => line.trim().startsWith('-'))
-    
+
     if (yamlStartIndex > 0) {
       // Remove any text before the YAML
       cleaned = lines.slice(yamlStartIndex).join('\n')
     }
-    
+
     // Remove any text after the YAML ends
     const yamlLines: string[] = []
     let inYaml = false
-    
+
     for (const line of cleaned.split('\n')) {
       if (line.trim().startsWith('-')) {
         inYaml = true
       }
-      
+
       if (inYaml) {
         // Stop if we hit a line that's not indented and doesn't start with -
         if (line.trim() && !line.startsWith(' ') && !line.trim().startsWith('-')) {
@@ -320,7 +320,7 @@ Consider using broader selectors first to test, then narrow down.`
         yamlLines.push(line)
       }
     }
-    
+
     return yamlLines.join('\n').trim()
   }
 
@@ -330,7 +330,7 @@ Consider using broader selectors first to test, then narrow down.`
       if (!Array.isArray(parsed)) {
         throw new Error("Workflow must be an array of steps")
       }
-      
+
       parsed.forEach((step, index) => {
         if (typeof step !== 'object' || step === null) {
           throw new Error(`Step ${index + 1} must be an object`)
@@ -357,7 +357,7 @@ Consider using broader selectors first to test, then narrow down.`
       flags.verbose,
       flags.keepOpen
     )
-    
+
     if (!this.page) {
       this.error('Failed to connect to Chrome')
     }
@@ -369,7 +369,7 @@ Consider using broader selectors first to test, then narrow down.`
 
     // Parse workflow
     const workflow = yaml.parse(yamlText)
-    
+
     // Execute with WorkflowExecutor
     const executor = new WorkflowExecutor(this.page!, instruction)
     const result = await executor.execute(workflow, {
@@ -382,12 +382,12 @@ Consider using broader selectors first to test, then narrow down.`
       await this.runLogManager.init()
       const currentUrl = await this.page!.url()
       const digest = await this.digestCollector.collect()
-      
+
       const runLog = await this.runLogManager.createRunLog(result, {
         url: currentUrl,
         domDigest: digest
       })
-      
+
       // Store run log ID in the current attempt
       if (this.attempts.length > 0) {
         this.attempts[this.attempts.length - 1].runLogId = runLog.id
@@ -408,7 +408,7 @@ Consider using broader selectors first to test, then narrow down.`
     this.log(`   ✅ Successful: ${result.successfulSteps}`)
     this.log(`   ❌ Failed: ${result.failedSteps}`)
     this.log(`   ⏱️  Duration: ${result.totalDuration}ms`)
-    
+
     if (result.failedSteps > 0) {
       this.log("\n❌ Failed steps:")
       result.steps.filter(step => !step.success).forEach(step => {
@@ -439,7 +439,7 @@ Consider using broader selectors first to test, then narrow down.`
       this.log(analysis)
     } else {
       lastAttempt.claudeAnalysis = verification.analysis
-      
+
       // Show suggestions if available
       if (verification.suggestions && verification.suggestions.length > 0) {
         this.log("\n💡 Suggestions for improvement:")
@@ -479,7 +479,7 @@ Consider using broader selectors first to test, then narrow down.`
           message: 'Enter modified instruction:',
           default: originalInstruction
         }])
-        
+
         // Reset attempts for new instruction
         this.attempts = []
         await this.attemptWorkflow(newInstruction, flags)
@@ -493,10 +493,10 @@ Consider using broader selectors first to test, then narrow down.`
           message: 'What additional details would you like to add?',
           validate: (input) => input.trim().length > 0 || 'Please provide additional details'
         }])
-        
+
         const appendedInstruction = `${originalInstruction}. ${appendText}`
         this.log(`\n📝 Updated instruction: "${appendedInstruction}"`)
-        
+
         // Keep previous attempts for context
         await this.attemptWorkflow(appendedInstruction, flags, this.attempts)
         break
@@ -515,7 +515,7 @@ Consider using broader selectors first to test, then narrow down.`
         }])
 
         let refinedInstruction = originalInstruction
-        
+
         switch (refinementType) {
           case 'element':
             const { elementDetails } = await inquirer.prompt([{
@@ -525,7 +525,7 @@ Consider using broader selectors first to test, then narrow down.`
             }])
             refinedInstruction = `${originalInstruction}. Look for ${elementDetails}`
             break
-          
+
           case 'wait':
             const { waitDetails } = await inquirer.prompt([{
               type: 'input',
@@ -534,7 +534,7 @@ Consider using broader selectors first to test, then narrow down.`
             }])
             refinedInstruction = `${originalInstruction}. ${waitDetails}`
             break
-          
+
           case 'format':
             const { formatDetails } = await inquirer.prompt([{
               type: 'input',
@@ -543,7 +543,7 @@ Consider using broader selectors first to test, then narrow down.`
             }])
             refinedInstruction = `${originalInstruction} and format ${formatDetails}`
             break
-          
+
           case 'error':
             refinedInstruction = `${originalInstruction}. If elements are not found, try alternative selectors. Handle any errors gracefully`
             break
@@ -614,14 +614,14 @@ Consider using broader selectors first to test, then narrow down.`
     result: WorkflowExecutionResult
   ): Promise<VerificationResult> {
     // Check if this was a data extraction that returned empty results
-    const isDataExtraction = instruction.toLowerCase().includes('scrape') || 
-                           instruction.toLowerCase().includes('extract') || 
-                           instruction.toLowerCase().includes('grab') ||
-                           instruction.toLowerCase().includes('get');
-    
-    const hasEmptyData = result.steps.some(step => 
-      step.command === 'evaluate' && 
-      step.output?.includes('0 items') || 
+    const isDataExtraction = instruction.toLowerCase().includes('scrape') ||
+      instruction.toLowerCase().includes('extract') ||
+      instruction.toLowerCase().includes('grab') ||
+      instruction.toLowerCase().includes('get');
+
+    const hasEmptyData = result.steps.some(step =>
+      step.command === 'evaluate' &&
+      step.output?.includes('0 items') ||
       step.output?.includes('[]')
     );
 
@@ -631,7 +631,7 @@ Consider using broader selectors first to test, then narrow down.`
       this.log("\n🔍 Inspecting page structure to find better selectors...");
       const inspector = new DOMInspector(this.page);
       const inspection = await inspector.inspectWithDigest(instruction);
-      
+
       // Format digest for Claude if available
       let digestInfo = '';
       if (inspection.digest) {
@@ -646,7 +646,7 @@ Sample Text Content:
 ${inspection.digest.texts.slice(0, 10).map(t => `  "${t}"`).join('\n')}
 `;
       }
-      
+
       domAnalysis = `
 DOM INSPECTION RESULTS:
 - Found ${inspection.selectors.common.length} repeated element patterns
@@ -695,7 +695,7 @@ Format your response as JSON:
 
     try {
       const response = await askClaude(verificationPrompt)
-      
+
       // Try to parse JSON response
       const jsonMatch = response.match(/\{[\s\S]*\}/)
       if (jsonMatch) {
@@ -707,7 +707,7 @@ Format your response as JSON:
           suggestions: parsed.suggestions
         }
       }
-      
+
       // Fallback if not proper JSON
       return {
         success: response.toLowerCase().includes("success") || response.toLowerCase().includes("correct"),
@@ -736,7 +736,7 @@ Format your response as JSON:
       choices: [
         { name: '💾 Save workflow for future use', value: 'save' },
         { name: '🔄 Run again', value: 'run' },
-        { name: '✏️  Modify and try different approach', value: 'modify' },
+        { name: '✏️ Modify and try different approach', value: 'modify' },
         { name: '➕ Append more specific instructions', value: 'append' },
         { name: '🚀 Continue building workflow from here...', value: 'continue' },
         { name: '✅ Done', value: 'done' }
@@ -747,12 +747,12 @@ Format your response as JSON:
       case 'save':
         await this.promptSaveWorkflow(instruction, yamlText)
         break
-      
+
       case 'run':
         this.log("\n🔄 Running workflow again...")
         await this.attemptWorkflow(instruction, flags, this.attempts)
         break
-      
+
       case 'modify':
         const { newInstruction } = await inquirer.prompt([{
           type: 'input',
@@ -763,7 +763,7 @@ Format your response as JSON:
         this.attempts = []
         await this.attemptWorkflow(newInstruction, flags)
         break
-      
+
       case 'append':
         this.log(`\n📜 Current instruction: "${instruction}"`)
         const { appendText } = await inquirer.prompt([{
@@ -772,30 +772,30 @@ Format your response as JSON:
           message: 'What additional details would you like to add?',
           validate: (input) => input.trim().length > 0 || 'Please provide additional details'
         }])
-        
+
         const appendedInstruction = `${instruction}. ${appendText}`
         this.log(`\n📝 Updated instruction: "${appendedInstruction}"`)
-        
+
         // Keep previous attempts for context
         await this.attemptWorkflow(appendedInstruction, flags, this.attempts)
         break
-      
+
       case 'continue':
         this.log('\n🚀 Continue building from current page...')
         const currentUrl = await this.page!.url()
         this.log(`📍 Current page: ${currentUrl}`)
-        
+
         const { continuationInstruction } = await inquirer.prompt([{
           type: 'input',
           name: 'continuationInstruction',
           message: 'What would you like to do next from this page?',
           validate: (input) => input.trim().length > 0 || 'Please describe what to do next'
         }])
-        
+
         // Continue with existing workflow as base
         await this.continueWorkflow(instruction, yamlText, continuationInstruction, flags)
         break
-      
+
       case 'done':
         this.log('✅ Great! Workflow completed successfully.')
         break
@@ -803,8 +803,8 @@ Format your response as JSON:
   }
 
   private hasEmptyDataExtraction(result: WorkflowExecutionResult): boolean {
-    return result.steps.some(step => 
-      step.command === 'evaluate' && 
+    return result.steps.some(step =>
+      step.command === 'evaluate' &&
       (step.output?.includes('0 items') || step.output?.includes('[]'))
     );
   }
@@ -818,7 +818,7 @@ Format your response as JSON:
     // Build a special prompt for continuing workflows
     const currentUrl = await this.page!.url()
     const pageTitle = await this.page!.title()
-    
+
     const continuationPrompt = `You are continuing an existing workflow. The user has navigated to an interesting page and wants to extend the workflow from there.
 
 EXISTING WORKFLOW:
@@ -845,41 +845,41 @@ IMPORTANT RULES:
 ${this.buildSystemPrompt().split('AVAILABLE COMMANDS:')[1]}`
 
     this.log("\n🤖 Generating continuation steps...")
-    
+
     try {
       const raw = await askClaude(continuationPrompt)
       const newStepsYaml = this.cleanYamlOutput(raw)
-      
+
       // Validate the new steps
       this.validateYaml(newStepsYaml)
-      
+
       // Combine existing and new YAML
       const combinedYaml = this.combineYamlWorkflows(existingYaml, newStepsYaml)
-      
+
       this.log("\n📝 Extended workflow:")
       this.log(combinedYaml)
-      
+
       // Execute only the new steps
       const newSteps = yaml.parse(newStepsYaml)
       const executor = new WorkflowExecutor(this.page!, continuationInstruction)
-      
+
       this.log("\n🚀 Executing new steps...")
       const result = await executor.execute(newSteps, {
         strict: false,
         captureOutput: true
       })
-      
+
       this.showExecutionSummary(result)
-      
+
       // Create a new attempt with the combined workflow
       const attempt: WorkflowAttempt = {
         prompt: `${originalInstruction} + ${continuationInstruction}`,
         yaml: combinedYaml,
         result
       }
-      
+
       this.attempts.push(attempt)
-      
+
       // Verify and handle next steps
       if (flags.interactive) {
         const verification = await this.verifyResults(
@@ -887,10 +887,10 @@ ${this.buildSystemPrompt().split('AVAILABLE COMMANDS:')[1]}`
           attempt,
           result
         )
-        
+
         this.log("\n🔍 AI Verification:")
         this.log(verification.analysis)
-        
+
         if (verification.success) {
           this.log("\n✅ " + verification.reason)
           await this.handleSuccessfulWorkflow(
@@ -918,10 +918,10 @@ ${this.buildSystemPrompt().split('AVAILABLE COMMANDS:')[1]}`
     // Parse both YAML documents
     const existingSteps = yaml.parse(existingYaml)
     const newSteps = yaml.parse(newYaml)
-    
+
     // Combine arrays
     const combined = [...existingSteps, ...newSteps]
-    
+
     // Convert back to YAML
     return yaml.stringify(combined)
   }

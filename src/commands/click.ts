@@ -2,6 +2,7 @@ import { Args, Flags } from '@oclif/core'
 import { BaseCommand } from '../base.js'
 import { waitForElement } from '../utils/selectors.js'
 import { handleCommandError } from '../utils/errors.js'
+import { checkMultipleMatches, formatElementMatches, getInteractiveSelection } from '../utils/selector-disambiguation.js'
 
 export default class Click extends BaseCommand {
   static description = 'Click an element by CSS selector'
@@ -45,6 +46,11 @@ export default class Click extends BaseCommand {
       description: 'Force click even if element is obscured',
       default: false,
     }),
+    interactive: Flags.boolean({
+      char: 'i',
+      description: 'Interactively select element when multiple matches are found',
+      default: false,
+    }),
   }
 
   static args = {
@@ -72,9 +78,35 @@ export default class Click extends BaseCommand {
     }
 
     try {
+      // Check for multiple matches first
+      const { count, elements } = await checkMultipleMatches(this.page!, args.selector)
+      
+      if (count === 0) {
+        this.error(`No elements found matching: ${args.selector}`)
+      }
+      
+      let finalSelector = args.selector
+      
+      if (count > 1) {
+        this.log(`⚠️  Multiple elements found matching: ${args.selector}`)
+        
+        if (flags.interactive && elements) {
+          const selected = await getInteractiveSelection(elements)
+          if (selected) {
+            finalSelector = selected
+            this.log(`✅ Using selector: ${finalSelector}`)
+          } else {
+            this.error('No element selected')
+          }
+        } else if (elements) {
+          this.log('\n' + formatElementMatches(elements))
+          this.error('Multiple elements found. Use a more specific selector or --interactive flag')
+        }
+      }
+      
       if (flags['wait-for-selector']) {
-        this.log(`⏳ Waiting for selector: ${args.selector}`)
-        await waitForElement(this.page!, args.selector, { timeout: flags.timeout })
+        this.log(`⏳ Waiting for selector: ${finalSelector}`)
+        await waitForElement(this.page!, finalSelector, { timeout: flags.timeout })
       }
 
       // Parse click options
@@ -106,17 +138,17 @@ export default class Click extends BaseCommand {
         }
       }
 
-      this.log(`🖱️  Clicking on: ${args.selector}`)
+      this.log(`🖱️  Clicking on: ${finalSelector}`)
       this.logVerbose('Click options', clickOptions)
 
-      await this.page!.click(args.selector, clickOptions)
+      await this.page!.click(finalSelector, clickOptions)
       
-      this.log(`✅ Successfully clicked on: ${args.selector}`)
+      this.log(`✅ Successfully clicked on: ${finalSelector}`)
 
       // Log element info if verbose
       if (flags.verbose) {
         try {
-          const elementInfo = await this.page!.$eval(args.selector, (el: Element) => {
+          const elementInfo = await this.page!.$eval(finalSelector, (el: Element) => {
             const rect = el.getBoundingClientRect()
             return {
               tagName: el.tagName.toLowerCase(),

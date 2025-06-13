@@ -2,6 +2,18 @@
 set -euo pipefail  # Exit on error, undefined vars, and pipeline failures
 IFS=$'\n\t'       # Stricter word splitting
 
+# Detect if iptables (nft) works, otherwise fall back to iptables-legacy
+if ! iptables -L -n >/dev/null 2>&1; then
+  echo "iptables (nft) not supported by kernel, trying iptables-legacy..."
+  if command -v iptables-legacy >/dev/null 2>&1; then
+    alias iptables="iptables-legacy"
+    echo "Using iptables-legacy binary"
+  else
+    echo "ERROR: Neither iptables nor iptables-legacy are functional on this system"
+    exit 1
+  fi
+fi
+
 # Flush existing rules and delete existing ipsets
 iptables -F
 iptables -X

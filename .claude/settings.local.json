@@ -34,7 +34,14 @@
       "Bash(/Users/johnlindquist/Library/pnpm/nodejs/22.15.1/lib/node_modules/chromancer/bin/run.js screenshot google-search-results.png)",
       "Bash(pnpm uninstall:*)",
       "Bash(pnpm install:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(time node:*)",
+      "Bash(chmod:*)",
+      "Bash(./demo-workflow.sh:*)",
+      "Bash(pkill:*)",
+      "Bash(true)",
+      "Bash(./test-exit-behavior.sh:*)",
+      "Bash(cat:*)"
     ],
     "deny": []
   }
