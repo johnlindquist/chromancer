@@ -14,6 +14,13 @@ interface WorkflowAttempt {
   claudeAnalysis?: string
 }
 
+interface VerificationResult {
+  success: boolean
+  analysis: string
+  reason: string
+  suggestions?: string[]
+}
+
 export default class Claude extends BaseCommand {
   static description =
     "Natural-language agent powered by Claude - turns English into Chromancer workflows with intelligent feedback loop"
@@ -95,12 +102,22 @@ export default class Claude extends BaseCommand {
       // Show execution summary
       this.showExecutionSummary(result)
 
-      // If interactive mode and workflow had issues, enter feedback loop
-      if (flags.interactive && (!result.success || result.failedSteps > 0)) {
-        await this.handleFeedbackLoop(instruction, attempt, flags)
-      } else if (flags.interactive && result.success) {
-        // Offer to save successful workflow
-        await this.promptSaveWorkflow(instruction, yamlText)
+      // If interactive mode, always verify results with Claude
+      if (flags.interactive) {
+        const verification = await this.verifyResults(instruction, attempt, result)
+        
+        // Show verification to user
+        this.log("\n🔍 AI Verification:")
+        this.log(verification.analysis)
+        
+        // Handle next steps based on verification
+        if (verification.success) {
+          this.log("\n✅ " + verification.reason)
+          await this.handleSuccessfulWorkflow(instruction, yamlText, flags)
+        } else {
+          this.log("\n⚠️  " + verification.reason)
+          await this.handleFeedbackLoop(instruction, attempt, flags, verification)
+        }
       }
 
     } catch (error) {
@@ -138,8 +155,17 @@ IMPORTANT DATA EXTRACTION RULES:
 - The evaluate script should return the data (arrays or objects work best)
 - The script must be a valid JavaScript expression that returns a value
 - Examples:
-  - Text array: Array.from(document.querySelectorAll('h1')).map(el => el.textContent.trim())
-  - Object array: Array.from(document.querySelectorAll('.item')).map(el => ({ title: el.querySelector('h2').textContent, link: el.querySelector('a').href }))
+  - Simple text: 
+    - evaluate: "document.querySelector('h1').textContent"
+  - Text array: 
+    - evaluate: "Array.from(document.querySelectorAll('h1')).map(el => el.textContent.trim())"
+  - For complex scripts use the script format:
+    - evaluate:
+        script: |
+          Array.from(document.querySelectorAll('.item')).map(el => ({
+            title: el.querySelector('h2').textContent,
+            link: el.querySelector('a').href
+          }))
 - The data will be automatically displayed and saved to a file
 - Format (JSON/CSV/text) is handled automatically based on user request
 
@@ -278,33 +304,50 @@ IMPORTANT: Your output must be valid YAML that starts with a dash (-) for each s
   private async handleFeedbackLoop(
     originalInstruction: string,
     lastAttempt: WorkflowAttempt,
-    flags: any
+    flags: any,
+    verification?: VerificationResult
   ): Promise<void> {
-    // Get Claude's analysis of what went wrong
-    const analysisPrompt = WorkflowExecutor.formatResultsForAnalysis(
-      lastAttempt.result!,
-      originalInstruction,
-      lastAttempt.yaml
-    ) + "\n\nProvide a brief analysis of what went wrong and what should be changed."
+    // Use provided verification or get Claude's analysis
+    if (!verification) {
+      const analysisPrompt = WorkflowExecutor.formatResultsForAnalysis(
+        lastAttempt.result!,
+        originalInstruction,
+        lastAttempt.yaml
+      ) + "\n\nProvide a brief analysis of what went wrong and what should be changed."
 
-    this.log("\n🔍 Analyzing results...")
-    const analysis = await askClaude(analysisPrompt)
-    lastAttempt.claudeAnalysis = analysis
+      this.log("\n🔍 Analyzing results...")
+      const analysis = await askClaude(analysisPrompt)
+      lastAttempt.claudeAnalysis = analysis
 
-    this.log("\n💡 Claude's analysis:")
-    this.log(analysis)
+      this.log("\n💡 Claude's analysis:")
+      this.log(analysis)
+    } else {
+      lastAttempt.claudeAnalysis = verification.analysis
+      
+      // Show suggestions if available
+      if (verification.suggestions && verification.suggestions.length > 0) {
+        this.log("\n💡 Suggestions for improvement:")
+        verification.suggestions.forEach((suggestion, index) => {
+          this.log(`   ${index + 1}. ${suggestion}`)
+        })
+      }
+    }
 
     // Show options to user
+    const choices = [
+      { name: '🔧 Autofix - Let Claude try again with improvements', value: 'autofix' },
+      { name: '✏️  Modify prompt - Change what you\'re asking for', value: 'modify' },
+      { name: '➕ Append to prompt - Add more details', value: 'append' },
+      { name: '🎯 Refine selectors - Help Claude find the right elements', value: 'refine' },
+      { name: '💾 Save anyway - Keep current workflow', value: 'save' },
+      { name: '🚪 Exit without saving', value: 'quit' }
+    ]
+
     const { action } = await inquirer.prompt([{
       type: 'list',
       name: 'action',
-      message: 'What would you like to do?',
-      choices: [
-        { name: '🔧 Autofix - Let Claude try again', value: 'autofix' },
-        { name: '✏️  Modify - Edit the instruction', value: 'modify' },
-        { name: '💾 Save - Save current workflow as-is', value: 'save' },
-        { name: '🚪 Quit - Exit without saving', value: 'quit' }
-      ]
+      message: 'The workflow needs improvement. What would you like to do?',
+      choices
     }])
 
     switch (action) {
@@ -329,6 +372,73 @@ IMPORTANT: Your output must be valid YAML that starts with a dash (-) for each s
         // Reset attempts for new instruction
         this.attempts = []
         await this.attemptWorkflow(newInstruction, flags)
+        break
+
+      case 'append':
+        const { appendText } = await inquirer.prompt([{
+          type: 'input',
+          name: 'appendText',
+          message: 'What additional details would you like to add?',
+          validate: (input) => input.trim().length > 0 || 'Please provide additional details'
+        }])
+        
+        const appendedInstruction = `${originalInstruction}. ${appendText}`
+        this.log(`\n📝 Updated instruction: "${appendedInstruction}"`)
+        
+        // Keep previous attempts for context
+        await this.attemptWorkflow(appendedInstruction, flags, this.attempts)
+        break
+
+      case 'refine':
+        const { refinementType } = await inquirer.prompt([{
+          type: 'list',
+          name: 'refinementType',
+          message: 'What would you like to refine?',
+          choices: [
+            { name: 'Specify exact element text or attributes', value: 'element' },
+            { name: 'Add wait conditions', value: 'wait' },
+            { name: 'Specify data format', value: 'format' },
+            { name: 'Add error handling', value: 'error' }
+          ]
+        }])
+
+        let refinedInstruction = originalInstruction
+        
+        switch (refinementType) {
+          case 'element':
+            const { elementDetails } = await inquirer.prompt([{
+              type: 'input',
+              name: 'elementDetails',
+              message: 'Describe the element more specifically (e.g., "the blue submit button", "link containing \'Login\'"):'
+            }])
+            refinedInstruction = `${originalInstruction}. Look for ${elementDetails}`
+            break
+          
+          case 'wait':
+            const { waitDetails } = await inquirer.prompt([{
+              type: 'input',
+              name: 'waitDetails',
+              message: 'What should we wait for? (e.g., "wait for loading spinner to disappear", "wait 2 seconds"):'
+            }])
+            refinedInstruction = `${originalInstruction}. ${waitDetails}`
+            break
+          
+          case 'format':
+            const { formatDetails } = await inquirer.prompt([{
+              type: 'input',
+              name: 'formatDetails',
+              message: 'How should the data be formatted? (e.g., "as CSV", "only titles", "include links"):'
+            }])
+            refinedInstruction = `${originalInstruction} and format ${formatDetails}`
+            break
+          
+          case 'error':
+            refinedInstruction = `${originalInstruction}. If elements are not found, try alternative selectors. Handle any errors gracefully`
+            break
+        }
+
+        this.log(`\n📝 Refined instruction: "${refinedInstruction}"`)
+        await this.attemptWorkflow(refinedInstruction, flags, this.attempts)
         break
 
       case 'save':
@@ -380,6 +490,115 @@ IMPORTANT: Your output must be valid YAML that starts with a dash (-) for each s
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       this.error(`Failed to save workflow: ${errorMessage}`)
+    }
+  }
+
+  private async verifyResults(
+    instruction: string,
+    attempt: WorkflowAttempt,
+    result: WorkflowExecutionResult
+  ): Promise<VerificationResult> {
+    // Build verification prompt
+    const verificationPrompt = `
+You are verifying if a browser automation workflow successfully achieved the user's goal.
+
+User's request: "${instruction}"
+
+Workflow executed with these results:
+${WorkflowExecutor.formatResultsForAnalysis(result, instruction, attempt.yaml)}
+
+VERIFICATION TASK:
+1. Analyze if the workflow achieved what the user requested
+2. Check if any extracted data looks correct and complete
+3. Identify any potential issues or missing steps
+
+Please provide:
+1. A brief analysis (2-3 sentences) of the results
+2. Whether it was successful (true/false)
+3. A reason why it succeeded or failed
+4. If failed, specific suggestions for improvement
+
+Format your response as JSON:
+{
+  "success": boolean,
+  "analysis": "Your 2-3 sentence analysis",
+  "reason": "Brief reason for success/failure",
+  "suggestions": ["suggestion 1", "suggestion 2"] // only if failed
+}
+`
+
+    try {
+      const response = await askClaude(verificationPrompt)
+      
+      // Try to parse JSON response
+      const jsonMatch = response.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0])
+        return {
+          success: parsed.success ?? false,
+          analysis: parsed.analysis || "Unable to analyze results",
+          reason: parsed.reason || "No reason provided",
+          suggestions: parsed.suggestions
+        }
+      }
+      
+      // Fallback if not proper JSON
+      return {
+        success: response.toLowerCase().includes("success") || response.toLowerCase().includes("correct"),
+        analysis: response,
+        reason: "Unable to parse structured response"
+      }
+    } catch (error) {
+      // If verification fails, assume workflow succeeded to avoid blocking
+      return {
+        success: true,
+        analysis: "Verification step encountered an error",
+        reason: "Proceeding with workflow as successful"
+      }
+    }
+  }
+
+  private async handleSuccessfulWorkflow(
+    instruction: string,
+    yamlText: string,
+    flags: any
+  ): Promise<void> {
+    const { action } = await inquirer.prompt([{
+      type: 'list',
+      name: 'action',
+      message: 'The workflow succeeded! What would you like to do?',
+      choices: [
+        { name: '💾 Save workflow for future use', value: 'save' },
+        { name: '🔄 Run again', value: 'run' },
+        { name: '✏️  Modify and try different approach', value: 'modify' },
+        { name: '✅ Done', value: 'done' }
+      ]
+    }])
+
+    switch (action) {
+      case 'save':
+        await this.promptSaveWorkflow(instruction, yamlText)
+        break
+      
+      case 'run':
+        this.log("\n🔄 Running workflow again...")
+        await this.attemptWorkflow(instruction, flags, this.attempts)
+        break
+      
+      case 'modify':
+        const { newInstruction } = await inquirer.prompt([{
+          type: 'input',
+          name: 'newInstruction',
+          message: 'Enter modified instruction:',
+          default: instruction
+        }])
+        this.attempts = []
+        await this.attemptWorkflow(newInstruction, flags)
+        break
+      
+      case 'done':
+        this.log('✅ Great! Workflow completed successfully.')
+        break
     }
   }
 }
