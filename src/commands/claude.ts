@@ -700,6 +700,7 @@ Format your response as JSON:
         { name: '🔄 Run again', value: 'run' },
         { name: '✏️  Modify and try different approach', value: 'modify' },
         { name: '➕ Append more specific instructions', value: 'append' },
+        { name: '🚀 Continue building workflow from here...', value: 'continue' },
         { name: '✅ Done', value: 'done' }
       ]
     }])
@@ -741,6 +742,22 @@ Format your response as JSON:
         await this.attemptWorkflow(appendedInstruction, flags, this.attempts)
         break
       
+      case 'continue':
+        this.log('\n🚀 Continue building from current page...')
+        const currentUrl = await this.page!.url()
+        this.log(`📍 Current page: ${currentUrl}`)
+        
+        const { continuationInstruction } = await inquirer.prompt([{
+          type: 'input',
+          name: 'continuationInstruction',
+          message: 'What would you like to do next from this page?',
+          validate: (input) => input.trim().length > 0 || 'Please describe what to do next'
+        }])
+        
+        // Continue with existing workflow as base
+        await this.continueWorkflow(instruction, yamlText, continuationInstruction, flags)
+        break
+      
       case 'done':
         this.log('✅ Great! Workflow completed successfully.')
         break
@@ -752,5 +769,122 @@ Format your response as JSON:
       step.command === 'evaluate' && 
       (step.output?.includes('0 items') || step.output?.includes('[]'))
     );
+  }
+
+  private async continueWorkflow(
+    originalInstruction: string,
+    existingYaml: string,
+    continuationInstruction: string,
+    flags: any
+  ): Promise<void> {
+    // Build a special prompt for continuing workflows
+    const currentUrl = await this.page!.url()
+    const pageTitle = await this.page!.title()
+    
+    const continuationPrompt = `You are continuing an existing workflow. The user has navigated to an interesting page and wants to extend the workflow from there.
+
+EXISTING WORKFLOW:
+Original instruction: "${originalInstruction}"
+Current YAML:
+${existingYaml}
+
+CURRENT STATE:
+- URL: ${currentUrl}
+- Page Title: ${pageTitle}
+- The workflow above has already been executed successfully
+- The browser is now on the page where the user wants to continue
+
+CONTINUATION REQUEST:
+"${continuationInstruction}"
+
+IMPORTANT RULES:
+1. Generate ONLY the NEW steps to add to the workflow
+2. Do NOT repeat the existing steps
+3. Start your YAML output with the first new step
+4. The new steps should seamlessly continue from where the existing workflow left off
+5. Return ONLY valid YAML - no explanations
+
+${this.buildSystemPrompt().split('AVAILABLE COMMANDS:')[1]}`
+
+    this.log("\n🤖 Generating continuation steps...")
+    
+    try {
+      const raw = await askClaude(continuationPrompt)
+      const newStepsYaml = this.cleanYamlOutput(raw)
+      
+      // Validate the new steps
+      this.validateYaml(newStepsYaml)
+      
+      // Combine existing and new YAML
+      const combinedYaml = this.combineYamlWorkflows(existingYaml, newStepsYaml)
+      
+      this.log("\n📝 Extended workflow:")
+      this.log(combinedYaml)
+      
+      // Execute only the new steps
+      const newSteps = yaml.parse(newStepsYaml)
+      const executor = new WorkflowExecutor(this.page!, continuationInstruction)
+      
+      this.log("\n🚀 Executing new steps...")
+      const result = await executor.execute(newSteps, {
+        strict: false,
+        captureOutput: true
+      })
+      
+      this.showExecutionSummary(result)
+      
+      // Create a new attempt with the combined workflow
+      const attempt: WorkflowAttempt = {
+        prompt: `${originalInstruction} + ${continuationInstruction}`,
+        yaml: combinedYaml,
+        result
+      }
+      
+      this.attempts.push(attempt)
+      
+      // Verify and handle next steps
+      if (flags.interactive) {
+        const verification = await this.verifyResults(
+          `${originalInstruction} and then ${continuationInstruction}`,
+          attempt,
+          result
+        )
+        
+        this.log("\n🔍 AI Verification:")
+        this.log(verification.analysis)
+        
+        if (verification.success) {
+          this.log("\n✅ " + verification.reason)
+          await this.handleSuccessfulWorkflow(
+            `${originalInstruction} and then ${continuationInstruction}`,
+            combinedYaml,
+            flags
+          )
+        } else {
+          this.log("\n⚠️  " + verification.reason)
+          await this.handleFeedbackLoop(
+            `${originalInstruction} and then ${continuationInstruction}`,
+            attempt,
+            flags,
+            verification
+          )
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      this.error(`Error generating continuation: ${errorMessage}`)
+    }
+  }
+
+  private combineYamlWorkflows(existingYaml: string, newYaml: string): string {
+    // Parse both YAML documents
+    const existingSteps = yaml.parse(existingYaml)
+    const newSteps = yaml.parse(newYaml)
+    
+    // Combine arrays
+    const combined = [...existingSteps, ...newSteps]
+    
+    // Convert back to YAML
+    return yaml.stringify(combined)
   }
 }
