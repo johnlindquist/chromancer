@@ -8,7 +8,7 @@ A powerful command-line interface for automating Chrome browser using Playwright
 
 ## ✨ What's New
 
-- **🤖 AI-Powered Automation** - Natural language commands with Claude integration
+- **🤖 AI-Powered Automation** - Natural language commands with AI integration
 - **🔍 Intelligent DOM Inspection** - Smart selector discovery for robust automation
 - **🔄 AI Feedback Loop** - Automatic workflow refinement and verification
 - **📊 Enhanced Data Extraction** - Automatic formatting and file saving
@@ -86,19 +86,22 @@ chromancer stop
 
 ```bash
 # Use natural language to control the browser
-chromancer claude "click the login button and wait for dashboard"
-chromancer claude "scroll down and take a screenshot of the footer"
-chromancer claude "extract all product prices from this page"
+chromancer ai "click the login button and wait for dashboard"
+chromancer ai "scroll down and take a screenshot of the footer"
+chromancer ai "extract all product prices from this page"
 
 # Interactive mode with AI feedback loop
-chromancer claude "find and click all download links"
-# Claude will verify results and refine if needed
+chromancer ai "find and click all download links"
+# AI will verify results and refine if needed
 
 # Preview generated workflow without executing
-chromancer claude --dry-run "fill out the contact form"
+chromancer ai --dry-run "fill out the contact form"
 
 # Skip interactive verification
-chromancer claude --no-interactive "navigate to settings and click logout"
+chromancer ai --no-interactive "navigate to settings and click logout"
+
+# Default command - just type your instruction!
+chromancer "take a screenshot of the hero section"
 ```
 
 #### 🔧 Advanced DOM Pipeline Optimizations
@@ -141,10 +144,10 @@ The Claude command includes intelligent DOM analysis and optimization features t
 **Example workflow with optimizations:**
 ```bash
 # First attempt might fail
-chromancer claude "extract all product prices"
+chromancer ai "extract all product prices"
 # 🔍 DOM inspection automatically activates
 # 📊 Generates mini digest with top patterns
-# 🎯 Claude receives: ".price-tag (47 elements)", ".product-price (23 elements)"
+# 🎯 AI receives: ".price-tag (47 elements)", ".product-price (23 elements)"
 # ✅ Second attempt uses better selectors
 ```
 
@@ -227,32 +230,32 @@ The Claude command transforms natural language into Chromancer workflows with in
 
 ```bash
 # Basic automation
-chromancer claude "go to github.com and click the sign in button"
+chromancer ai "go to github.com and click the sign in button"
 
 # Data extraction with automatic formatting
-chromancer claude "extract all article headlines and save them as JSON"
+chromancer ai "extract all article headlines and save them as JSON"
 
 # Complex workflows
-chromancer claude "login to dashboard, navigate to reports, and download the monthly CSV"
+chromancer ai "login to dashboard, navigate to reports, and download the monthly CSV"
 
 # With verification
-chromancer claude "find all product cards and verify each has a price"
+chromancer ai "find all product cards and verify each has a price"
 ```
 
 ### Advanced Options
 
 ```bash
 # Preview without executing
-chromancer claude --dry-run "fill out the entire registration form"
+chromancer ai --dry-run "fill out the entire registration form"
 
 # Skip interactive feedback
-chromancer claude --no-interactive "take screenshots of each section"
+chromancer ai --no-interactive "take screenshots of each section"
 
 # Set maximum retry attempts
-chromancer claude --max-attempts 5 "find and click the hidden menu"
+chromancer ai "find and click the hidden menu"
 
 # Disable auto DOM inspection
-chromancer claude --no-auto-inspect "click the submit button"
+chromancer ai --no-auto-inspect "click the submit button"
 ```
 
 ### How It Works
@@ -532,17 +535,20 @@ cat api-calls.json | jq '.[] | select(.duration > 1000)'
 
 ```bash
 # Extract data with natural language
-chromancer claude "extract all product names and prices from this page"
+chromancer ai "extract all product names and prices from this page"
 # Automatically saves to timestamped JSON file
 
 # Complex data extraction
-chromancer claude "find all news articles, get their titles, dates, and first paragraph"
+chromancer ai "find all news articles, get their titles, dates, and first paragraph"
 
 # Table extraction
-chromancer claude "extract the pricing table and save it as CSV"
+chromancer ai "extract the pricing table and save it as CSV"
 
 # Multi-step scraping
-chromancer claude "go to the blog section, then extract all post titles and links"
+chromancer ai "go to the blog section, then extract all post titles and links"
+
+# Or use the default command!
+chromancer "scrape all email addresses from this page"
 ```
 
 ## Platform Support
