@@ -1,6 +1,7 @@
 import { Page } from 'playwright';
 import { DOMDigestCollector, DOMDigest } from './dom-digest.js';
 import { SelectorRanker } from './selector-ranker.js';
+import { SearchResultAnalyzer } from './search-result-analyzer.js';
 
 export interface DOMInspectionResult {
   selectors: {
@@ -238,6 +239,32 @@ export class DOMInspector {
     
     // Add digest to result
     result.digest = digest;
+    
+    // Check if this is a search-related query
+    const searchKeywords = ['search', 'results', 'news', 'articles', 'headlines'];
+    const isSearchQuery = searchKeywords.some(keyword => 
+      targetDescription.toLowerCase().includes(keyword)
+    );
+    
+    if (isSearchQuery) {
+      // Run search-specific analysis
+      const analyzer = new SearchResultAnalyzer(this.page);
+      const searchAnalysis = await analyzer.analyzeSearchResults();
+      
+      // Prioritize news patterns for news queries
+      if (targetDescription.toLowerCase().includes('news') || 
+          targetDescription.toLowerCase().includes('article')) {
+        const newsPatterns = searchAnalysis.patterns
+          .filter(p => p.type === 'news')
+          .map(p => p.selector);
+        
+        if (newsPatterns.length > 0) {
+          // Add news patterns to the front
+          result.selectors.common = [...newsPatterns, ...result.selectors.common];
+          result.suggestions.unshift(...searchAnalysis.recommendations);
+        }
+      }
+    }
     
     // Rank the common selectors
     if (result.selectors.common.length > 0) {

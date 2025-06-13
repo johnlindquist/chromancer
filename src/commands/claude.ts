@@ -202,6 +202,17 @@ IMPORTANT DATA EXTRACTION RULES:
 - The data will be automatically displayed and saved to a file
 - Format (JSON/CSV/text) is handled automatically based on user request
 
+SEARCH RESULT EXTRACTION TIPS:
+- Google search results are typically in '.g' containers
+- News articles often have dates/timestamps and source names
+- Skip "People also ask" boxes and featured snippets at the top
+- For news articles specifically, look for:
+  - Elements containing dates (e.g., "2 hours ago", "Dec 13")
+  - Elements with news source names (CNN, BBC, etc.)
+  - h3 tags within search result containers
+- Bio/profile links (Wikipedia, social media) usually appear at the top
+- To get actual search results, skip the first few elements if they're profiles
+
 IMPORTANT: Your output must be valid YAML that starts with a dash (-) for each step.`
 
     // Add context from previous attempts
@@ -449,6 +460,7 @@ Consider using broader selectors first to test, then narrow down.`
         break
 
       case 'append':
+        this.log(`\n📜 Current instruction: "${originalInstruction}"`)
         const { appendText } = await inquirer.prompt([{
           type: 'input',
           name: 'appendText',
@@ -696,6 +708,7 @@ Format your response as JSON:
         { name: '💾 Save workflow for future use', value: 'save' },
         { name: '🔄 Run again', value: 'run' },
         { name: '✏️  Modify and try different approach', value: 'modify' },
+        { name: '➕ Append more specific instructions', value: 'append' },
         { name: '✅ Done', value: 'done' }
       ]
     }])
@@ -719,6 +732,22 @@ Format your response as JSON:
         }])
         this.attempts = []
         await this.attemptWorkflow(newInstruction, flags)
+        break
+      
+      case 'append':
+        this.log(`\n📜 Current instruction: "${instruction}"`)
+        const { appendText } = await inquirer.prompt([{
+          type: 'input',
+          name: 'appendText',
+          message: 'What additional details would you like to add?',
+          validate: (input) => input.trim().length > 0 || 'Please provide additional details'
+        }])
+        
+        const appendedInstruction = `${instruction}. ${appendText}`
+        this.log(`\n📝 Updated instruction: "${appendedInstruction}"`)
+        
+        // Keep previous attempts for context
+        await this.attemptWorkflow(appendedInstruction, flags, this.attempts)
         break
       
       case 'done':
