@@ -3,6 +3,7 @@ import { BaseCommand } from "../base.js"
 import { askClaude } from "../utils/claude.js"
 import { WorkflowExecutor } from "../utils/workflow-executor.js"
 import { WorkflowStorage } from "../utils/workflow-storage.js"
+import { DOMInspector } from "../utils/dom-inspector.js"
 import * as yaml from "yaml"
 import inquirer from "inquirer"
 import type { WorkflowExecutionResult } from "../types/workflow.js"
@@ -46,6 +47,10 @@ export default class Claude extends BaseCommand {
     "max-attempts": Flags.integer({
       description: "Maximum autofix attempts",
       default: 3,
+    }),
+    "auto-inspect": Flags.boolean({
+      description: "Automatically inspect DOM when selectors fail",
+      default: true,
     }),
   }
 
@@ -193,6 +198,15 @@ IMPORTANT: Your output must be valid YAML that starts with a dash (-) for each s
       })
 
       prompt += "\n\nBased on the previous attempts, generate an improved workflow that addresses the issues."
+      
+      // Add specific guidance for data extraction failures
+      const lastAttempt = previousAttempts[previousAttempts.length - 1];
+      if (lastAttempt?.result && this.hasEmptyDataExtraction(lastAttempt.result)) {
+        prompt += `\n\nIMPORTANT: The previous attempt failed to extract any data. 
+The selectors used did not match any elements on the page. 
+Based on the DOM analysis, try using more generic selectors or the suggested patterns.
+Consider using broader selectors first to test, then narrow down.`
+      }
     }
 
     return prompt
@@ -498,6 +512,38 @@ IMPORTANT: Your output must be valid YAML that starts with a dash (-) for each s
     attempt: WorkflowAttempt,
     result: WorkflowExecutionResult
   ): Promise<VerificationResult> {
+    // Check if this was a data extraction that returned empty results
+    const isDataExtraction = instruction.toLowerCase().includes('scrape') || 
+                           instruction.toLowerCase().includes('extract') || 
+                           instruction.toLowerCase().includes('grab') ||
+                           instruction.toLowerCase().includes('get');
+    
+    const hasEmptyData = result.steps.some(step => 
+      step.command === 'evaluate' && 
+      step.output?.includes('0 items') || 
+      step.output?.includes('[]')
+    );
+
+    // If data extraction failed, do DOM inspection
+    let domAnalysis = '';
+    if (isDataExtraction && hasEmptyData && this.page) {
+      this.log("\n🔍 Inspecting page structure to find better selectors...");
+      const inspector = new DOMInspector(this.page);
+      const inspection = await inspector.inspectForDataExtraction(instruction);
+      
+      domAnalysis = `
+DOM INSPECTION RESULTS:
+- Found ${inspection.selectors.common.length} repeated element patterns
+- Most common pattern: ${inspection.selectors.common[0] || 'none found'}
+- Page has ${inspection.structure.headings.length} headings, ${inspection.structure.links.length} links
+
+Suggestions:
+${inspection.suggestions.join('\n')}
+
+Working selectors found:
+${inspection.selectors.common.slice(0, 5).join(', ')}
+`;
+    }
     // Build verification prompt
     const verificationPrompt = `
 You are verifying if a browser automation workflow successfully achieved the user's goal.
@@ -506,6 +552,8 @@ User's request: "${instruction}"
 
 Workflow executed with these results:
 ${WorkflowExecutor.formatResultsForAnalysis(result, instruction, attempt.yaml)}
+
+${domAnalysis ? `\n${domAnalysis}\n` : ''}
 
 VERIFICATION TASK:
 1. Analyze if the workflow achieved what the user requested
@@ -600,5 +648,12 @@ Format your response as JSON:
         this.log('✅ Great! Workflow completed successfully.')
         break
     }
+  }
+
+  private hasEmptyDataExtraction(result: WorkflowExecutionResult): boolean {
+    return result.steps.some(step => 
+      step.command === 'evaluate' && 
+      (step.output?.includes('0 items') || step.output?.includes('[]'))
+    );
   }
 }
