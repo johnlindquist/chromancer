@@ -54,15 +54,24 @@ export function extractPageTitle(output) {
   return match ? match[1] : '';
 }
 
-export async function waitForElement(selector, timeout = 5000) {
+export async function waitForElement(selector, timeout = 3000) {
   const startTime = Date.now();
+  const checkInterval = 50; // Check more frequently
+  
   while (Date.now() - startTime < timeout) {
     const result = await runChromancer('evaluate', [`document.querySelector('${selector}') !== null`]);
     const evaluateResult = extractEvaluateResult(result.stdout);
     if (evaluateResult === 'true') {
       return true;
     }
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, checkInterval));
   }
   return false;
+}
+
+// Helper for better error messages in tests
+export function expectWithTimeout(actual, expected, message) {
+  if (actual !== expected) {
+    throw new Error(`${message || 'Assertion failed'}: expected "${expected}" but got "${actual}"`);
+  }
 }

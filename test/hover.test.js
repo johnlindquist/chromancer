@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { runChromancer, getTestUrl } from './test-utils.js';
-import { createTestServer } from './test-server.js';
+import { getTestServer } from './test-helpers.js';
 
 describe('Hover Command', () => {
   let server;

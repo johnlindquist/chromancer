@@ -1,19 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { runChromancer, getTestUrl } from './test-utils.js';
-import { createTestServer } from './test-server.js';
+import { getTestServer } from './test-helpers.js';
 
 describe('Click Command', () => {
-  let server;
-  
   beforeAll(async () => {
-    server = createTestServer(3456);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-  });
-  
-  afterAll(async () => {
-    if (server) {
-      await server.close();
-    }
+    await getTestServer();
   });
   
   it('should click a button by ID', async () => {
