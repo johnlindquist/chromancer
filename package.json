@@ -57,6 +57,7 @@
     "oclif": "^4.18.0",
     "playwright": "^1.52.0",
     "typescript": "^5.8.3",
+    "uuid": "^11.1.0",
     "yaml": "^2.8.0"
   },
   "oclif": {
@@ -73,6 +74,7 @@
     "/oclif.manifest.json"
   ],
   "devDependencies": {
+    "@types/uuid": "^10.0.0",
     "@vitest/ui": "^3.2.3",
     "express": "^5.1.0",
     "serve-static": "^2.2.0",
