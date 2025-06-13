@@ -82,7 +82,7 @@ export default class Claude extends BaseCommand {
       if (flags["dry-run"]) return
 
       // Execute workflow
-      const result = await this.executeWorkflow(yamlText, flags)
+      const result = await this.executeWorkflow(yamlText, flags, instruction)
       
       // Store this attempt
       const attempt: WorkflowAttempt = {
@@ -127,12 +127,21 @@ AVAILABLE COMMANDS:
 - wait: Wait for element/URL ({selector, timeout} or {url, timeout})
 - screenshot: Take screenshot (filename or {path, fullPage})
 - scroll: Scroll page ({to: percentage} or {selector})
-- evaluate: Run JavaScript ({script} or script string)
+- evaluate: Run JavaScript ({script} or script string) - USE THIS FOR DATA EXTRACTION/SCRAPING
 - hover: Hover over element (selector)
 - select: Select dropdown option ({selector, value/label/index})
 - fill: Fill form field ({selector, value})
 - assert: Assert condition ({selector, text/value/visible})
-- store: Store value in variable ({selector, variable})
+
+IMPORTANT DATA EXTRACTION RULES:
+- When user asks to "scrape", "grab", "extract", or "get" data, ALWAYS use evaluate
+- The evaluate script should return the data (arrays or objects work best)
+- The script must be a valid JavaScript expression that returns a value
+- Examples:
+  - Text array: Array.from(document.querySelectorAll('h1')).map(el => el.textContent.trim())
+  - Object array: Array.from(document.querySelectorAll('.item')).map(el => ({ title: el.querySelector('h2').textContent, link: el.querySelector('a').href }))
+- The data will be automatically displayed and saved to a file
+- Format (JSON/CSV/text) is handled automatically based on user request
 
 IMPORTANT: Your output must be valid YAML that starts with a dash (-) for each step.`
 
@@ -222,7 +231,7 @@ IMPORTANT: Your output must be valid YAML that starts with a dash (-) for each s
     }
   }
 
-  private async executeWorkflow(yamlText: string, flags: any): Promise<WorkflowExecutionResult> {
+  private async executeWorkflow(yamlText: string, flags: any, instruction?: string): Promise<WorkflowExecutionResult> {
     // Connect to Chrome
     await this.connectToChrome(
       flags.port,
@@ -242,7 +251,7 @@ IMPORTANT: Your output must be valid YAML that starts with a dash (-) for each s
     const workflow = yaml.parse(yamlText)
     
     // Execute with WorkflowExecutor
-    const executor = new WorkflowExecutor(this.page!)
+    const executor = new WorkflowExecutor(this.page!, instruction)
     const result = await executor.execute(workflow, {
       strict: false, // Don't stop on errors, we want to see all results
       captureOutput: true

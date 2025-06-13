@@ -1,6 +1,7 @@
 import { Page } from 'playwright';
 import type { WorkflowStepResult, WorkflowExecutionResult } from '../types/workflow.js';
 import * as yaml from 'yaml';
+import { DataFormatter } from './data-formatter.js';
 
 interface WorkflowStep {
   [command: string]: any;
@@ -16,9 +17,11 @@ interface WorkflowOptions {
 export class WorkflowExecutor {
   private page: Page;
   private stepResults: WorkflowStepResult[] = [];
+  private originalPrompt?: string;
 
-  constructor(page: Page) {
+  constructor(page: Page, originalPrompt?: string) {
     this.page = page;
+    this.originalPrompt = originalPrompt;
   }
 
   async execute(
@@ -173,7 +176,46 @@ export class WorkflowExecutor {
       case 'eval':
         const script = typeof args === 'string' ? args : args.script || args.code;
         const result = await this.page.evaluate(script);
-        output = options.captureOutput ? JSON.stringify(result, null, 2) : `Evaluated script`;
+        
+        // Always capture evaluate results for data extraction
+        if (result !== undefined && result !== null) {
+          // Check if this looks like data extraction (arrays or objects with content)
+          const isDataExtraction = Array.isArray(result) || 
+            (typeof result === 'object' && Object.keys(result).length > 0);
+          
+          if (isDataExtraction) {
+            // Detect format from args or original prompt
+            let format = args.format || 'json';
+            
+            // Auto-detect format from original prompt if available
+            if (!args.format && this.originalPrompt) {
+              format = DataFormatter.detectFormat(this.originalPrompt);
+            }
+            
+            const filename = args.filename;
+            
+            const { filepath, displayed } = await DataFormatter.saveAndDisplay(result, {
+              format,
+              filename,
+              display: true
+            });
+            
+            // Show user-friendly path
+            const home = process.env.HOME || process.env.USERPROFILE || '';
+            const displayPath = filepath.startsWith(home) 
+              ? filepath.replace(home, '~')
+              : filepath;
+            
+            output = `Extracted data (${Array.isArray(result) ? result.length + ' items' : 'object'}) - saved to ${displayPath}`;
+          } else {
+            // Simple result, just log it
+            const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
+            console.log(`\n📤 Result: ${resultStr}`);
+            output = `Evaluated script - result: ${resultStr}`;
+          }
+        } else {
+          output = `Evaluated script - no data returned`;
+        }
         break;
 
       case 'scroll':
