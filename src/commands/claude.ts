@@ -98,7 +98,35 @@ export default class Claude extends BaseCommand {
     
     // Build system prompt with context from previous attempts
     const systemPrompt = this.buildSystemPrompt(previousAttempts, domDigest)
-    const fullPrompt = `${systemPrompt}\n\nUser instruction: ${instruction}`
+    
+    // Structure the instruction based on whether this is a retry
+    let structuredInstruction = ''
+    if (previousAttempts && previousAttempts.length > 0) {
+      // Extract original instruction from the first attempt
+      const originalInstruction = previousAttempts[0].prompt
+      
+      // Check if current instruction is different (has been appended/modified)
+      if (instruction !== originalInstruction) {
+        // Extract the follow-up part
+        const followUpPart = instruction.replace(originalInstruction, '').replace(/^[.\s]+/, '')
+        
+        structuredInstruction = `<original-instruction>
+${originalInstruction}
+</original-instruction>
+
+<follow-up-instruction>
+${followUpPart}
+</follow-up-instruction>
+
+Note: The original instruction failed. The user has provided additional clarification above.`
+      } else {
+        structuredInstruction = `User instruction: ${instruction}`
+      }
+    } else {
+      structuredInstruction = `User instruction: ${instruction}`
+    }
+    
+    const fullPrompt = `${systemPrompt}\n\n${structuredInstruction}`
 
     this.log("🤖 Asking Claude...")
     
@@ -209,7 +237,14 @@ SEARCH RESULT EXTRACTION TIPS:
 - Bio/profile links (Wikipedia, social media) usually appear at the top
 - To get actual search results, skip the first few elements if they're profiles
 
-IMPORTANT: Your output must be valid YAML that starts with a dash (-) for each step.`
+IMPORTANT: Your output must be valid YAML that starts with a dash (-) for each step.
+
+INSTRUCTION HANDLING:
+- If you receive <original-instruction> and <follow-up-instruction> tags, this means:
+  - The original instruction was attempted but failed or was incomplete
+  - The user has provided additional clarification in the follow-up
+  - You should consider BOTH parts to understand the full intent
+  - Focus on addressing what was missing or unclear from the first attempt`
 
     // Add context from previous attempts
     if (previousAttempts && previousAttempts.length > 0) {
@@ -536,7 +571,10 @@ Consider using broader selectors first to test, then narrow down.`
       default: true
     }])
 
-    if (!shouldSave) return
+    if (!shouldSave) {
+      this.log('✅ Workflow completed without saving.')
+      return
+    }
 
     const { name, description, tags } = await inquirer.prompt([
       {
