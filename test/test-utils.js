@@ -16,11 +16,11 @@ export async function runChromancer(command, args = []) {
   
   try {
     const { stdout, stderr } = await execAsync(fullCommand);
-    return { stdout, stderr, success: true };
+    return { stdout: stdout.trim(), stderr: stderr.trim(), success: true };
   } catch (error) {
     return { 
-      stdout: error.stdout || '', 
-      stderr: error.stderr || error.message, 
+      stdout: (error.stdout || '').trim(), 
+      stderr: (error.stderr || error.message).trim(), 
       success: false,
       error 
     };
@@ -31,11 +31,35 @@ export function getTestUrl(path = '') {
   return `${TEST_URL}${path}`;
 }
 
+// Helper to extract the actual result from evaluate command output
+export function extractEvaluateResult(output) {
+  const lines = output.split('\n');
+  const resultIndex = lines.findIndex(line => line.includes('📤 Result:'));
+  if (resultIndex >= 0 && resultIndex + 1 < lines.length) {
+    // Return all lines after "Result:" line
+    return lines.slice(resultIndex + 1).join('\n').trim();
+  }
+  return '';
+}
+
+// Helper to extract the final URL from navigate command output
+export function extractFinalUrl(output) {
+  const match = output.match(/🔀 Final URL: (.+)/);
+  return match ? match[1] : '';
+}
+
+// Helper to extract page title from navigate command output
+export function extractPageTitle(output) {
+  const match = output.match(/📄 Page title: "(.+)"/);
+  return match ? match[1] : '';
+}
+
 export async function waitForElement(selector, timeout = 5000) {
   const startTime = Date.now();
   while (Date.now() - startTime < timeout) {
     const result = await runChromancer('evaluate', [`document.querySelector('${selector}') !== null`]);
-    if (result.stdout.includes('true')) {
+    const evaluateResult = extractEvaluateResult(result.stdout);
+    if (evaluateResult === 'true') {
       return true;
     }
     await new Promise(resolve => setTimeout(resolve, 100));

@@ -37,8 +37,8 @@ export abstract class BaseCommand extends Command {
     }),
     keepOpen: Flags.boolean({
       char: 'k',
-      description: 'Keep Chrome open after command completes',
-      default: true,
+      description: 'Keep Chrome open after the command (only relevant when this command launches Chrome)',
+      default: false,
       allowNo: true,
     }),
   }
@@ -93,7 +93,9 @@ export abstract class BaseCommand extends Command {
     keepOpen: boolean = true
   ): Promise<void> {
     this.verbose = verbose
-    this.keepOpen = keepOpen
+    // If we *attach* to external Chrome, always auto‑disconnect unless
+    // the caller explicitly passed --keepOpen
+    this.keepOpen = launch ? keepOpen : false
     const startTime = Date.now()
     
     this.logVerbose('Starting Chrome connection process', { port, host, launch, profile, headless })
@@ -279,21 +281,23 @@ Possible solutions:
   }
 
   async finally(): Promise<void> {
-    if (this.browser) {
-      if (this.isLaunched) {
-        if (this.keepOpen) {
-          this.log('🔓 Keeping Chrome open (use --no-keepOpen to close automatically)')
-          // For launched browsers that we want to keep open, we don't close them
-          // The browser will continue running after our process exits
-        } else {
-          this.log('🔒 Closing Chrome...')
-          await this.browser.close()
-        }
+    if (!this.browser) return;
+
+    // 1️⃣ We launched Chrome in this process -----------------------------
+    if (this.isLaunched) {
+      if (this.keepOpen) {
+        this.log('🔓 Keeping Chrome open (use --no-keepOpen to close automatically)');
       } else {
-        // Was connected to existing instance
-        // For connected browsers, we don't need to do anything special
-        // The connection will be cleaned up when the process exits
+        this.log('🔒 Closing Chrome (launched by this command)…');
+        await this.browser.close();
       }
+      return;
     }
+
+    // 2️⃣ We only attached to an *external* Chrome -----------------------
+    // Close the CDP *connection* so Node's event‑loop can exit, but
+    // *do not* close the user's Chrome window.
+    this.logVerbose('Disconnecting from existing Chrome…');
+    await this.browser.close();
   }
 }

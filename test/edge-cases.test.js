@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { runChromancer, getTestUrl } from './test-utils.js';
+import { runChromancer, getTestUrl, extractEvaluateResult, extractFinalUrl, extractPageTitle } from './test-utils.js';
 import { createTestServer } from './test-server.js';
 
 describe('Edge Cases - Navigation', () => {
@@ -23,13 +23,18 @@ describe('Edge Cases - Navigation', () => {
     // Click hash link
     await runChromancer('click', ['a[href="#section2"]']);
     
+    // Wait for navigation to complete
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     // Verify we're still on same page but hash changed
     const urlResult = await runChromancer('evaluate', ['window.location.href']);
-    expect(urlResult.stdout).toContain('#section2');
+    const evaluatedUrl = extractEvaluateResult(urlResult.stdout);
+    expect(evaluatedUrl).toContain('#section2');
     
     // Verify scroll position changed
     const scrollResult = await runChromancer('evaluate', ['window.pageYOffset > 0']);
-    expect(scrollResult.stdout).toContain('true');
+    const scrolled = extractEvaluateResult(scrollResult.stdout);
+    expect(scrolled).toBe('true');
   });
   
   it('should handle JavaScript-based navigation', async () => {
@@ -39,9 +44,13 @@ describe('Edge Cases - Navigation', () => {
     // Click JS navigation button
     await runChromancer('click', ['button:has-text("JS Navigate")']);
     
+    // Wait for navigation to complete
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     // Verify navigation occurred
     const titleResult = await runChromancer('evaluate', ['document.title']);
-    expect(titleResult.stdout).toContain('Form Test Page');
+    const title = extractEvaluateResult(titleResult.stdout);
+    expect(title).toContain('Form Test Page');
   });
   
   it('should handle form submission navigation', async () => {
@@ -53,7 +62,8 @@ describe('Edge Cases - Navigation', () => {
     
     // Check URL has query params
     const urlResult = await runChromancer('evaluate', ['window.location.search']);
-    expect(urlResult.stdout).toContain('source=navigation-edge');
+    const queryParams = extractEvaluateResult(urlResult.stdout);
+    expect(queryParams).toContain('source=navigation-edge');
   });
   
   it('should track navigation history for back/forward', async () => {
@@ -67,7 +77,8 @@ describe('Edge Cases - Navigation', () => {
     await new Promise(resolve => setTimeout(resolve, 500));
     
     const titleResult = await runChromancer('evaluate', ['document.title']);
-    expect(titleResult.stdout).toContain('Form Test Page');
+    const pageTitle = extractEvaluateResult(titleResult.stdout);
+    expect(pageTitle).toContain('Form Test Page');
   });
 });
 
@@ -96,7 +107,8 @@ describe('Edge Cases - Click Interactions', () => {
     // Note: True double-click would need a new command
     // This tests rapid clicking which is different
     const countResult = await runChromancer('evaluate', ['document.getElementById("dbl-count").textContent']);
-    expect(parseInt(countResult.stdout)).toBeGreaterThan(0);
+    const count = extractEvaluateResult(countResult.stdout);
+    expect(parseInt(count)).toBeGreaterThan(0);
   });
   
   it('should handle nested clickable elements', async () => {
@@ -108,8 +120,9 @@ describe('Edge Cases - Click Interactions', () => {
     
     // Check click log
     const logResult = await runChromancer('evaluate', ['document.getElementById("click-log").textContent']);
-    expect(logResult.stdout).toContain('inner');
-    expect(logResult.stdout).not.toContain('outer');
+    const logText = extractEvaluateResult(logResult.stdout);
+    expect(logText).toContain('inner');
+    expect(logText).not.toContain('outer');
   });
   
   it('should handle rapidly changing element states', async () => {
@@ -122,7 +135,8 @@ describe('Edge Cases - Click Interactions', () => {
     }
     
     const countResult = await runChromancer('evaluate', ['document.getElementById("rapid-count").textContent']);
-    expect(parseInt(countResult.stdout)).toBeGreaterThanOrEqual(1);
+    const rapidCount = extractEvaluateResult(countResult.stdout);
+    expect(parseInt(rapidCount)).toBeGreaterThanOrEqual(1);
   });
   
   it('should click at specific coordinates', async () => {
@@ -134,7 +148,8 @@ describe('Edge Cases - Click Interactions', () => {
     
     // Verify coordinates were captured
     const coordResult = await runChromancer('evaluate', ['document.getElementById("coord-display").textContent']);
-    expect(coordResult.stdout).toContain('Clicked at:');
+    const coordText = extractEvaluateResult(coordResult.stdout);
+    expect(coordText).toContain('Clicked at:');
   });
 });
 
@@ -163,7 +178,9 @@ describe('Edge Cases - Type Inputs', () => {
     
     // Value should not change
     const afterValue = await runChromancer('evaluate', ['document.getElementById("readonly-input").value']);
-    expect(afterValue.stdout).toBe(initialValue.stdout);
+    const initialVal = extractEvaluateResult(initialValue.stdout);
+    const afterVal = extractEvaluateResult(afterValue.stdout);
+    expect(afterVal).toBe(initialVal);
   });
   
   it('should handle maxlength restrictions', async () => {
@@ -175,7 +192,8 @@ describe('Edge Cases - Type Inputs', () => {
     
     // Check length is restricted
     const valueResult = await runChromancer('evaluate', ['document.getElementById("maxlength-input").value.length']);
-    expect(valueResult.stdout).toContain('10');
+    const length = extractEvaluateResult(valueResult.stdout);
+    expect(length).toBe('10');
   });
   
   it('should handle auto-formatting inputs', async () => {
@@ -187,7 +205,8 @@ describe('Edge Cases - Type Inputs', () => {
     
     // Check it was auto-formatted
     const valueResult = await runChromancer('evaluate', ['document.getElementById("phone-format").value']);
-    expect(valueResult.stdout).toContain('(123) 456-7890');
+    const phoneValue = extractEvaluateResult(valueResult.stdout);
+    expect(phoneValue).toContain('(123) 456-7890');
   });
   
   it('should handle contenteditable elements', async () => {
@@ -202,7 +221,8 @@ describe('Edge Cases - Type Inputs', () => {
     await runChromancer('evaluate', ['document.getElementById("contenteditable").textContent = "New content"']);
     
     const contentResult = await runChromancer('evaluate', ['document.getElementById("contenteditable").textContent']);
-    expect(contentResult.stdout).toContain('New content');
+    const content = extractEvaluateResult(contentResult.stdout);
+    expect(content).toContain('New content');
   });
   
   it('should handle dynamically visible inputs', async () => {
@@ -216,7 +236,8 @@ describe('Edge Cases - Type Inputs', () => {
     await runChromancer('type', ['#toggle-input', 'Now visible!']);
     
     const valueResult = await runChromancer('evaluate', ['document.getElementById("toggle-input").value']);
-    expect(valueResult.stdout).toContain('Now visible!');
+    const toggleValue = extractEvaluateResult(valueResult.stdout);
+    expect(toggleValue).toContain('Now visible!');
   });
 });
 
