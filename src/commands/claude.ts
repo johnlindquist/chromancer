@@ -50,10 +50,6 @@ export default class Claude extends BaseCommand {
       default: true,
       allowNo: true,
     }),
-    "max-attempts": Flags.integer({
-      description: "Maximum autofix attempts",
-      default: 3,
-    }),
     "auto-inspect": Flags.boolean({
       description: "Automatically inspect DOM when selectors fail",
       default: true,
@@ -437,13 +433,8 @@ Consider using broader selectors first to test, then narrow down.`
 
     switch (action) {
       case 'autofix':
-        if (this.attempts.length >= flags["max-attempts"]) {
-          this.warn(`Maximum attempts (${flags["max-attempts"]}) reached.`)
-          await this.promptSaveWorkflow(originalInstruction, lastAttempt.yaml)
-        } else {
-          this.log(`\n🔄 Attempt ${this.attempts.length + 1} of ${flags["max-attempts"]}...`)
-          await this.attemptWorkflow(originalInstruction, flags, this.attempts)
-        }
+        this.log(`\n🔄 Attempt ${this.attempts.length + 1}...`)
+        await this.attemptWorkflow(originalInstruction, flags, this.attempts)
         break
 
       case 'modify':
