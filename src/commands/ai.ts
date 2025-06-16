@@ -1064,19 +1064,14 @@ ${this.buildSystemPrompt().split('AVAILABLE COMMANDS:')[1]}`
   ): string {
     let refinedInstruction = originalInstruction
 
-    // Add context about what was extracted/found
+    // Add comprehensive context about the previous execution
     if (lastResult) {
-      const dataSteps = lastResult.steps.filter(step =>
-        step.command === 'evaluate' && step.output && !step.output.includes('undefined')
-      )
-
-      if (dataSteps.length > 0) {
-        refinedInstruction += `. Previous attempt extracted: ${dataSteps[0].output?.split('\n')[0]}`
-      }
+      const previousResultSummary = this.formatResultForFeedback(lastResult)
+      refinedInstruction += `\n\nPREVIOUS EXECUTION RESULTS:\n${previousResultSummary}`
     }
 
     // Add the user's feedback
-    refinedInstruction += `. ${feedbackText}`
+    refinedInstruction += `\n\nUSER FEEDBACK: ${feedbackText}`
 
     return refinedInstruction
   }
