@@ -1,4 +1,4 @@
-import { Args, Flags } from "@oclif/core"
+import { Args, Flags, type Config } from "@oclif/core"
 import { BaseCommand } from "../base.js"
 import { askClaude } from "../utils/claude.js"
 import { WorkflowExecutor } from "../utils/workflow-executor.js"
@@ -66,7 +66,7 @@ export default class AI extends BaseCommand {
   private storage = new WorkflowStorage()
   private attempts: WorkflowAttempt[] = []
 
-  constructor(argv: string[], config: any) {
+  constructor(argv: string[], config: Config) {
     super(argv, config)
     this.runLogManager = new RunLogManager()
   }
@@ -78,7 +78,7 @@ export default class AI extends BaseCommand {
     await this.attemptWorkflow(args.instruction, flags)
   }
 
-  private async attemptWorkflow(instruction: string, flags: any, previousAttempts?: WorkflowAttempt[]): Promise<void> {
+  private async attemptWorkflow(instruction: string, flags: Record<string, unknown>, previousAttempts?: WorkflowAttempt[]): Promise<void> {
     // Collect DOM digest if we're already connected and have failures
     let domDigest: string | undefined
     if (this.page && previousAttempts && previousAttempts.length > 0) {
@@ -169,10 +169,10 @@ Note: The original instruction failed. The user has provided additional clarific
 
         // Handle next steps based on verification
         if (verification.success) {
-          this.log("\n✅ " + verification.reason)
+          this.log(`\n✅ ${verification.reason}`)
           await this.handleSuccessfulWorkflow(instruction, yamlText, flags)
         } else {
-          this.log("\n⚠️  " + verification.reason)
+          this.log(`\n⚠️  ${verification.reason}`)
           await this.handleFeedbackLoop(instruction, attempt, flags, verification)
         }
       }
@@ -346,30 +346,30 @@ Consider using broader selectors first to test, then narrow down.`
     }
   }
 
-  private async executeWorkflow(yamlText: string, flags: any, instruction?: string): Promise<WorkflowExecutionResult> {
+  private async executeWorkflow(yamlText: string, flags: Record<string, unknown>, instruction?: string): Promise<WorkflowExecutionResult> {
     // Try to connect to Chrome, auto-launch if needed
     try {
       await this.connectToChrome(
-        flags.port,
-        flags.host,
-        flags.launch,
-        flags.profile,
-        flags.headless,
-        flags.verbose,
-        flags.keepOpen
+        flags.port as number | undefined,
+        flags.host as string | undefined,
+        flags.launch as boolean | undefined,
+        flags.profile as string | undefined,
+        flags.headless as boolean | undefined,
+        flags.verbose as boolean | undefined,
+        flags.keepOpen as boolean | undefined
       )
     } catch (error) {
       // If connection failed and launch wasn't already true, try auto-launching
       if (!flags.launch) {
         this.log('🚀 No Chrome instance found. Auto-launching Chrome...')
         await this.connectToChrome(
-          flags.port,
-          flags.host,
+          flags.port as number | undefined,
+          flags.host as string | undefined,
           true, // Force launch
-          flags.profile,
-          flags.headless,
-          flags.verbose,
-          flags.keepOpen
+          flags.profile as string | undefined,
+          flags.headless as boolean | undefined,
+          flags.verbose as boolean | undefined,
+          flags.keepOpen as boolean | undefined
         )
       } else {
         throw error
@@ -382,14 +382,14 @@ Consider using broader selectors first to test, then narrow down.`
 
     // Initialize digest collector if needed
     if (!this.digestCollector) {
-      this.digestCollector = new DOMDigestCollector(this.page!)
+      this.digestCollector = new DOMDigestCollector(this.page)
     }
 
     // Parse workflow
     const workflow = yaml.parse(yamlText)
 
     // Execute with WorkflowExecutor
-    const executor = new WorkflowExecutor(this.page!, instruction)
+    const executor = new WorkflowExecutor(this.page, instruction)
     const result = await executor.execute(workflow, {
       strict: false, // Don't stop on errors, we want to see all results
       captureOutput: true
@@ -398,7 +398,7 @@ Consider using broader selectors first to test, then narrow down.`
     // Create run log
     try {
       await this.runLogManager.init()
-      const currentUrl = await this.page!.url()
+      const currentUrl = await this.page.url()
       const digest = await this.digestCollector.collect()
 
       const runLog = await this.runLogManager.createRunLog(result, {
@@ -429,25 +429,25 @@ Consider using broader selectors first to test, then narrow down.`
 
     if (result.failedSteps > 0) {
       this.log("\n❌ Failed steps:")
-      result.steps.filter(step => !step.success).forEach(step => {
+      for (const step of result.steps.filter(step => !step.success)) {
         this.log(`   Step ${step.stepNumber} (${step.command}): ${step.error}`)
-      })
+      }
     }
   }
 
   private async handleFeedbackLoop(
     originalInstruction: string,
     lastAttempt: WorkflowAttempt,
-    flags: any,
+    flags: Record<string, unknown>,
     verification?: VerificationResult
   ): Promise<void> {
     // Use provided verification or get Claude's analysis
     if (!verification) {
-      const analysisPrompt = WorkflowExecutor.formatResultsForAnalysis(
-        lastAttempt.result!,
+      const analysisPrompt = `${WorkflowExecutor.formatResultsForAnalysis(
+        lastAttempt.result ?? {} as WorkflowExecutionResult,
         originalInstruction,
         lastAttempt.yaml
-      ) + "\n\nProvide a brief analysis of what went wrong and what should be changed."
+      )}\n\nProvide a brief analysis of what went wrong and what should be changed.`
 
       this.log("\n🔍 Analyzing results...")
       const analysis = await askClaude(analysisPrompt)
@@ -461,26 +461,26 @@ Consider using broader selectors first to test, then narrow down.`
       // Show suggestions if available
       if (verification.suggestions && verification.suggestions.length > 0) {
         this.log("\n💡 Suggestions for improvement:")
-        verification.suggestions.forEach((suggestion, index) => {
+        for (const [index, suggestion] of verification.suggestions.entries()) {
           this.log(`   ${index + 1}. ${suggestion}`)
-        })
+        }
       }
     }
 
     // Build menu choices with suggestions as first options
     const choices = []
-    
+
     // Add suggestion-based choices first
-    if (verification && verification.suggestions && verification.suggestions.length > 0) {
-      verification.suggestions.slice(0, 3).forEach((suggestion, index) => {
+    if (verification?.suggestions?.length) {
+      for (const [index, suggestion] of verification.suggestions.slice(0, 3).entries()) {
         choices.push({
           name: `💡 ${index + 1}. ${suggestion}`,
           value: `suggestion_${index}`
         })
-      })
+      }
       choices.push({ name: '─────────────────', value: 'separator', disabled: true })
     }
-    
+
     // Add standard choices
     choices.push(
       { name: '🔧 Autofix - Let Claude try again with improvements', value: 'autofix' },
@@ -500,13 +500,13 @@ Consider using broader selectors first to test, then narrow down.`
 
     // Handle suggestion selections
     if (action.startsWith('suggestion_')) {
-      const suggestionIndex = parseInt(action.split('_')[1])
-      const suggestion = verification!.suggestions![suggestionIndex]
-      
+      const suggestionIndex = Number.parseInt(action.split('_')[1])
+      const suggestion = verification?.suggestions?.[suggestionIndex] ?? ''
+
       const appendedInstruction = `${originalInstruction}. ${suggestion}`
       this.log(`\n📝 Applying suggestion: "${suggestion}"`)
       this.log(`Updated instruction: "${appendedInstruction}"`)
-      
+
       // Keep previous attempts for context
       await this.attemptWorkflow(appendedInstruction, flags, this.attempts)
       return
@@ -518,7 +518,7 @@ Consider using broader selectors first to test, then narrow down.`
         await this.attemptWorkflow(originalInstruction, flags, this.attempts)
         break
 
-      case 'modify':
+      case 'modify': {
         const { newInstruction } = await inquirer.prompt([{
           type: 'input',
           name: 'newInstruction',
@@ -530,17 +530,18 @@ Consider using broader selectors first to test, then narrow down.`
         this.attempts = []
         await this.attemptWorkflow(newInstruction, flags)
         break
+      }
 
-      case 'refine-feedback':
+      case 'refine-feedback': {
         this.log(`\n📜 Original instruction: "${originalInstruction}"`)
-        this.log(`\n📊 Previous result:`)
-        
+        this.log('\n📊 Previous result:')
+
         // Show the output from the last attempt
         if (lastAttempt.result) {
           const resultSummary = this.formatResultForFeedback(lastAttempt.result)
           this.log(resultSummary)
         }
-        
+
         const { feedbackText } = await inquirer.prompt([{
           type: 'input',
           name: 'feedbackText',
@@ -554,14 +555,15 @@ Consider using broader selectors first to test, then narrow down.`
           lastAttempt.result,
           feedbackText
         )
-        
-        this.log(`\n📝 Refining with your feedback...`)
+
+        this.log('\n📝 Refining with your feedback...')
 
         // Keep previous attempts for context
         await this.attemptWorkflow(refinedInstruction, flags, this.attempts)
         break
+      }
 
-      case 'refine':
+      case 'refine': {
         const { refinementType } = await inquirer.prompt([{
           type: 'list',
           name: 'refinementType',
@@ -577,7 +579,7 @@ Consider using broader selectors first to test, then narrow down.`
         let refinedSelectorInstruction = originalInstruction
 
         switch (refinementType) {
-          case 'element':
+          case 'element': {
             const { elementDetails } = await inquirer.prompt([{
               type: 'input',
               name: 'elementDetails',
@@ -585,8 +587,9 @@ Consider using broader selectors first to test, then narrow down.`
             }])
             refinedSelectorInstruction = `${originalInstruction}. Look for ${elementDetails}`
             break
+          }
 
-          case 'wait':
+          case 'wait': {
             const { waitDetails } = await inquirer.prompt([{
               type: 'input',
               name: 'waitDetails',
@@ -594,8 +597,9 @@ Consider using broader selectors first to test, then narrow down.`
             }])
             refinedSelectorInstruction = `${originalInstruction}. ${waitDetails}`
             break
+          }
 
-          case 'format':
+          case 'format': {
             const { formatDetails } = await inquirer.prompt([{
               type: 'input',
               name: 'formatDetails',
@@ -603,6 +607,7 @@ Consider using broader selectors first to test, then narrow down.`
             }])
             refinedSelectorInstruction = `${originalInstruction} and format ${formatDetails}`
             break
+          }
 
           case 'error':
             refinedSelectorInstruction = `${originalInstruction}. If elements are not found, try alternative selectors. Handle any errors gracefully`
@@ -612,6 +617,7 @@ Consider using broader selectors first to test, then narrow down.`
         this.log(`\n📝 Refined instruction: "${refinedSelectorInstruction}"`)
         await this.attemptWorkflow(refinedSelectorInstruction, flags, this.attempts)
         break
+      }
 
       case 'save':
         await this.promptSaveWorkflow(originalInstruction, lastAttempt.yaml)
@@ -792,7 +798,7 @@ IMPORTANT for suggestions:
   private async handleSuccessfulWorkflow(
     instruction: string,
     yamlText: string,
-    flags: any
+    flags: Record<string, unknown>
   ): Promise<void> {
     const { action } = await inquirer.prompt([{
       type: 'list',
@@ -818,7 +824,7 @@ IMPORTANT for suggestions:
         await this.attemptWorkflow(instruction, flags, this.attempts)
         break
 
-      case 'modify':
+      case 'modify': {
         const { newInstruction } = await inquirer.prompt([{
           type: 'input',
           name: 'newInstruction',
@@ -828,18 +834,19 @@ IMPORTANT for suggestions:
         this.attempts = []
         await this.attemptWorkflow(newInstruction, flags)
         break
+      }
 
-      case 'refine-feedback':
+      case 'refine-feedback': {
         this.log(`\n📜 Original instruction: "${instruction}"`)
-        this.log(`\n📊 Current result:`)
-        
+        this.log('\n📊 Current result:')
+
         // Show the output from the last successful attempt
         const lastSuccessfulAttempt = this.attempts[this.attempts.length - 1]
-        if (lastSuccessfulAttempt && lastSuccessfulAttempt.result) {
+        if (lastSuccessfulAttempt?.result) {
           const resultSummary = this.formatResultForFeedback(lastSuccessfulAttempt.result)
           this.log(resultSummary)
         }
-        
+
         const { feedbackText } = await inquirer.prompt([{
           type: 'input',
           name: 'feedbackText',
@@ -853,16 +860,20 @@ IMPORTANT for suggestions:
           lastSuccessfulAttempt?.result,
           feedbackText
         )
-        
-        this.log(`\n📝 Refining with your feedback...`)
+
+        this.log('\n📝 Refining with your feedback...')
 
         // Keep previous attempts for context
         await this.attemptWorkflow(refinedWithFeedback, flags, this.attempts)
         break
+      }
 
-      case 'continue':
+      case 'continue': {
         this.log('\n🚀 Continue building from current page...')
-        const currentUrl = await this.page!.url()
+        if (!this.page) {
+          this.error('No active page connection')
+        }
+        const currentUrl = await this.page.url()
         this.log(`📍 Current page: ${currentUrl}`)
 
         const { continuationInstruction } = await inquirer.prompt([{
@@ -875,6 +886,7 @@ IMPORTANT for suggestions:
         // Continue with existing workflow as base
         await this.continueWorkflow(instruction, yamlText, continuationInstruction, flags)
         break
+      }
 
       case 'done':
         this.log('✅ Great! Workflow completed successfully.')
@@ -893,11 +905,14 @@ IMPORTANT for suggestions:
     originalInstruction: string,
     existingYaml: string,
     continuationInstruction: string,
-    flags: any
+    flags: Record<string, unknown>
   ): Promise<void> {
     // Build a special prompt for continuing workflows
-    const currentUrl = await this.page!.url()
-    const pageTitle = await this.page!.title()
+    if (!this.page) {
+      this.error('No active page connection')
+    }
+    const currentUrl = await this.page.url()
+    const pageTitle = await this.page?.title() ?? ''
 
     const continuationPrompt = `You are continuing an existing workflow. The user has navigated to an interesting page and wants to extend the workflow from there.
 
@@ -941,7 +956,10 @@ ${this.buildSystemPrompt().split('AVAILABLE COMMANDS:')[1]}`
 
       // Execute only the new steps
       const newSteps = yaml.parse(newStepsYaml)
-      const executor = new WorkflowExecutor(this.page!, continuationInstruction)
+      if (!this.page) {
+        this.error('No active page connection')
+      }
+      const executor = new WorkflowExecutor(this.page, continuationInstruction)
 
       this.log("\n🚀 Executing new steps...")
       const result = await executor.execute(newSteps, {
@@ -972,14 +990,14 @@ ${this.buildSystemPrompt().split('AVAILABLE COMMANDS:')[1]}`
         this.log(verification.analysis)
 
         if (verification.success) {
-          this.log("\n✅ " + verification.reason)
+          this.log(`\n✅ ${verification.reason}`)
           await this.handleSuccessfulWorkflow(
             `${originalInstruction} and then ${continuationInstruction}`,
             combinedYaml,
             flags
           )
         } else {
-          this.log("\n⚠️  " + verification.reason)
+          this.log(`\n⚠️  ${verification.reason}`)
           await this.handleFeedbackLoop(
             `${originalInstruction} and then ${continuationInstruction}`,
             attempt,
@@ -1008,34 +1026,34 @@ ${this.buildSystemPrompt().split('AVAILABLE COMMANDS:')[1]}`
 
   private formatResultForFeedback(result: WorkflowExecutionResult): string {
     const lines: string[] = []
-    
+
     // Show data extraction results if any
-    const dataSteps = result.steps.filter(step => 
+    const dataSteps = result.steps.filter(step =>
       step.command === 'evaluate' && step.output && !step.output.includes('undefined')
     )
-    
+
     if (dataSteps.length > 0) {
-      dataSteps.forEach(step => {
+      for (const step of dataSteps) {
         if (step.output) {
           lines.push(step.output)
         }
-      })
+      }
     }
-    
+
     // Show failed steps
     if (result.failedSteps > 0) {
       lines.push('\n❌ Failed steps:')
-      result.steps.filter(step => !step.success).forEach(step => {
+      for (const step of result.steps.filter(step => !step.success)) {
         lines.push(`   Step ${step.stepNumber} (${step.command}): ${step.error}`)
-      })
+      }
     }
-    
+
     // Show execution summary
-    lines.push(`\n📊 Execution Summary:`)
+    lines.push('\n📊 Execution Summary:')
     lines.push(`   Total steps: ${result.totalSteps}`)
     lines.push(`   ✅ Successful: ${result.successfulSteps}`)
     lines.push(`   ❌ Failed: ${result.failedSteps}`)
-    
+
     return lines.join('\n')
   }
 
@@ -1045,21 +1063,21 @@ ${this.buildSystemPrompt().split('AVAILABLE COMMANDS:')[1]}`
     feedbackText: string
   ): string {
     let refinedInstruction = originalInstruction
-    
+
     // Add context about what was extracted/found
     if (lastResult) {
-      const dataSteps = lastResult.steps.filter(step => 
+      const dataSteps = lastResult.steps.filter(step =>
         step.command === 'evaluate' && step.output && !step.output.includes('undefined')
       )
-      
+
       if (dataSteps.length > 0) {
         refinedInstruction += `. Previous attempt extracted: ${dataSteps[0].output?.split('\n')[0]}`
       }
     }
-    
+
     // Add the user's feedback
     refinedInstruction += `. ${feedbackText}`
-    
+
     return refinedInstruction
   }
 }
