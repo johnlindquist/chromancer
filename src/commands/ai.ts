@@ -485,7 +485,7 @@ Consider using broader selectors first to test, then narrow down.`
     choices.push(
       { name: '🔧 Autofix - Let Claude try again with improvements', value: 'autofix' },
       { name: '✏️ Modify prompt - Change what you\'re asking for', value: 'modify' },
-      { name: '➕ Append to prompt - Add more details', value: 'append' },
+      { name: '🔄 Refine with feedback - Correct the results', value: 'refine-feedback' },
       { name: '🎯 Refine selectors - Help Claude find the right elements', value: 'refine' },
       { name: '💾 Save anyway - Keep current workflow', value: 'save' },
       { name: '🚪 Exit without saving', value: 'quit' }
@@ -531,20 +531,34 @@ Consider using broader selectors first to test, then narrow down.`
         await this.attemptWorkflow(newInstruction, flags)
         break
 
-      case 'append':
-        this.log(`\n📜 Current instruction: "${originalInstruction}"`)
-        const { appendText } = await inquirer.prompt([{
+      case 'refine-feedback':
+        this.log(`\n📜 Original instruction: "${originalInstruction}"`)
+        this.log(`\n📊 Previous result:`)
+        
+        // Show the output from the last attempt
+        if (lastAttempt.result) {
+          const resultSummary = this.formatResultForFeedback(lastAttempt.result)
+          this.log(resultSummary)
+        }
+        
+        const { feedbackText } = await inquirer.prompt([{
           type: 'input',
-          name: 'appendText',
-          message: 'What additional details would you like to add?',
-          validate: (input) => input.trim().length > 0 || 'Please provide additional details'
+          name: 'feedbackText',
+          message: 'What needs to be corrected or improved?',
+          validate: (input) => input.trim().length > 0 || 'Please provide your feedback'
         }])
 
-        const appendedInstruction = `${originalInstruction}. ${appendText}`
-        this.log(`\n📝 Updated instruction: "${appendedInstruction}"`)
+        // Create a structured refinement that includes the output
+        const refinedInstruction = this.createRefinedInstruction(
+          originalInstruction,
+          lastAttempt.result,
+          feedbackText
+        )
+        
+        this.log(`\n📝 Refining with your feedback...`)
 
         // Keep previous attempts for context
-        await this.attemptWorkflow(appendedInstruction, flags, this.attempts)
+        await this.attemptWorkflow(refinedInstruction, flags, this.attempts)
         break
 
       case 'refine':
@@ -560,7 +574,7 @@ Consider using broader selectors first to test, then narrow down.`
           ]
         }])
 
-        let refinedInstruction = originalInstruction
+        let refinedSelectorInstruction = originalInstruction
 
         switch (refinementType) {
           case 'element':
@@ -569,7 +583,7 @@ Consider using broader selectors first to test, then narrow down.`
               name: 'elementDetails',
               message: 'Describe the element more specifically (e.g., "the blue submit button", "link containing \'Login\'"):'
             }])
-            refinedInstruction = `${originalInstruction}. Look for ${elementDetails}`
+            refinedSelectorInstruction = `${originalInstruction}. Look for ${elementDetails}`
             break
 
           case 'wait':
@@ -578,7 +592,7 @@ Consider using broader selectors first to test, then narrow down.`
               name: 'waitDetails',
               message: 'What should we wait for? (e.g., "wait for loading spinner to disappear", "wait 2 seconds"):'
             }])
-            refinedInstruction = `${originalInstruction}. ${waitDetails}`
+            refinedSelectorInstruction = `${originalInstruction}. ${waitDetails}`
             break
 
           case 'format':
@@ -587,16 +601,16 @@ Consider using broader selectors first to test, then narrow down.`
               name: 'formatDetails',
               message: 'How should the data be formatted? (e.g., "as CSV", "only titles", "include links"):'
             }])
-            refinedInstruction = `${originalInstruction} and format ${formatDetails}`
+            refinedSelectorInstruction = `${originalInstruction} and format ${formatDetails}`
             break
 
           case 'error':
-            refinedInstruction = `${originalInstruction}. If elements are not found, try alternative selectors. Handle any errors gracefully`
+            refinedSelectorInstruction = `${originalInstruction}. If elements are not found, try alternative selectors. Handle any errors gracefully`
             break
         }
 
-        this.log(`\n📝 Refined instruction: "${refinedInstruction}"`)
-        await this.attemptWorkflow(refinedInstruction, flags, this.attempts)
+        this.log(`\n📝 Refined instruction: "${refinedSelectorInstruction}"`)
+        await this.attemptWorkflow(refinedSelectorInstruction, flags, this.attempts)
         break
 
       case 'save':
@@ -788,7 +802,7 @@ IMPORTANT for suggestions:
         { name: '💾 Save workflow for future use', value: 'save' },
         { name: '🔄 Run again', value: 'run' },
         { name: '✏️ Modify and try different approach', value: 'modify' },
-        { name: '➕ Append more specific instructions', value: 'append' },
+        { name: '🔄 Refine with feedback - Different results needed', value: 'refine-feedback' },
         { name: '🚀 Continue building workflow from here...', value: 'continue' },
         { name: '✅ Done', value: 'done' }
       ]
@@ -815,20 +829,35 @@ IMPORTANT for suggestions:
         await this.attemptWorkflow(newInstruction, flags)
         break
 
-      case 'append':
-        this.log(`\n📜 Current instruction: "${instruction}"`)
-        const { appendText } = await inquirer.prompt([{
+      case 'refine-feedback':
+        this.log(`\n📜 Original instruction: "${instruction}"`)
+        this.log(`\n📊 Current result:`)
+        
+        // Show the output from the last successful attempt
+        const lastSuccessfulAttempt = this.attempts[this.attempts.length - 1]
+        if (lastSuccessfulAttempt && lastSuccessfulAttempt.result) {
+          const resultSummary = this.formatResultForFeedback(lastSuccessfulAttempt.result)
+          this.log(resultSummary)
+        }
+        
+        const { feedbackText } = await inquirer.prompt([{
           type: 'input',
-          name: 'appendText',
-          message: 'What additional details would you like to add?',
-          validate: (input) => input.trim().length > 0 || 'Please provide additional details'
+          name: 'feedbackText',
+          message: 'What needs to be different about the results?',
+          validate: (input) => input.trim().length > 0 || 'Please provide your feedback'
         }])
 
-        const appendedInstruction = `${instruction}. ${appendText}`
-        this.log(`\n📝 Updated instruction: "${appendedInstruction}"`)
+        // Create a structured refinement that includes the output
+        const refinedWithFeedback = this.createRefinedInstruction(
+          instruction,
+          lastSuccessfulAttempt?.result,
+          feedbackText
+        )
+        
+        this.log(`\n📝 Refining with your feedback...`)
 
         // Keep previous attempts for context
-        await this.attemptWorkflow(appendedInstruction, flags, this.attempts)
+        await this.attemptWorkflow(refinedWithFeedback, flags, this.attempts)
         break
 
       case 'continue':
@@ -975,5 +1004,62 @@ ${this.buildSystemPrompt().split('AVAILABLE COMMANDS:')[1]}`
 
     // Convert back to YAML
     return yaml.stringify(combined)
+  }
+
+  private formatResultForFeedback(result: WorkflowExecutionResult): string {
+    const lines: string[] = []
+    
+    // Show data extraction results if any
+    const dataSteps = result.steps.filter(step => 
+      step.command === 'evaluate' && step.output && !step.output.includes('undefined')
+    )
+    
+    if (dataSteps.length > 0) {
+      dataSteps.forEach(step => {
+        if (step.output) {
+          lines.push(step.output)
+        }
+      })
+    }
+    
+    // Show failed steps
+    if (result.failedSteps > 0) {
+      lines.push('\n❌ Failed steps:')
+      result.steps.filter(step => !step.success).forEach(step => {
+        lines.push(`   Step ${step.stepNumber} (${step.command}): ${step.error}`)
+      })
+    }
+    
+    // Show execution summary
+    lines.push(`\n📊 Execution Summary:`)
+    lines.push(`   Total steps: ${result.totalSteps}`)
+    lines.push(`   ✅ Successful: ${result.successfulSteps}`)
+    lines.push(`   ❌ Failed: ${result.failedSteps}`)
+    
+    return lines.join('\n')
+  }
+
+  private createRefinedInstruction(
+    originalInstruction: string,
+    lastResult: WorkflowExecutionResult | undefined,
+    feedbackText: string
+  ): string {
+    let refinedInstruction = originalInstruction
+    
+    // Add context about what was extracted/found
+    if (lastResult) {
+      const dataSteps = lastResult.steps.filter(step => 
+        step.command === 'evaluate' && step.output && !step.output.includes('undefined')
+      )
+      
+      if (dataSteps.length > 0) {
+        refinedInstruction += `. Previous attempt extracted: ${dataSteps[0].output?.split('\n')[0]}`
+      }
+    }
+    
+    // Add the user's feedback
+    refinedInstruction += `. ${feedbackText}`
+    
+    return refinedInstruction
   }
 }
