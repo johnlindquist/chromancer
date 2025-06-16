@@ -227,17 +227,17 @@ IMPORTANT DATA EXTRACTION RULES:
 - The data will be automatically displayed and saved to a file
 - Format (JSON/CSV/text) is handled automatically based on user request
 
-SEARCH HANDLING TIPS:
-- Many sites hide search inputs until a search icon/button is clicked first
-- If you get "element is not visible" errors on search inputs:
-  1. First click any search icon/button (often with magnifying glass icon)
-  2. Wait for the search input to become visible
-  3. Then type in the search input
-- Common search patterns:
-  - Click search icon → type in revealed input → press Enter
-  - Type directly in visible search bar → press Enter or click submit
-  - Navigate directly to search URL with query parameter
-- For egghead.io specifically: click the search icon first to reveal the input
+VISIBILITY AND INTERACTION PATTERNS:
+- If you encounter "element is not visible" errors:
+  1. The element might be hidden until another action reveals it
+  2. Look for related buttons/icons that might toggle visibility
+  3. Try hovering over parent elements that might reveal hidden content
+  4. Consider if the element appears after page interactions
+- Learn from error messages - they often indicate what went wrong:
+  - "not visible" = element exists but is hidden
+  - "timeout exceeded" = element doesn't exist or selector is wrong
+  - "multiple elements" = selector is too broad
+- Adapt your approach based on previous attempts and error patterns
 
 SEARCH RESULT EXTRACTION TIPS:
 - Google search results are typically in '.g' containers
@@ -273,6 +273,21 @@ INSTRUCTION HANDLING:
             attempt.prompt,
             attempt.yaml
           )
+          
+          // Add detailed error analysis for learning
+          const failedSteps = attempt.result.steps.filter(s => !s.success)
+          if (failedSteps.length > 0) {
+            prompt += "\n\nERROR PATTERNS TO LEARN FROM:"
+            for (const step of failedSteps) {
+              if (step.error?.includes('not visible')) {
+                prompt += `\n- Step ${step.stepNumber}: Element "${step.args}" exists but is not visible. This suggests it may need to be revealed by another interaction first.`
+              } else if (step.error?.includes('Timeout') && step.error?.includes('exceeded')) {
+                prompt += `\n- Step ${step.stepNumber}: Selector "${step.args}" timed out. Either the selector is wrong or the element doesn't exist yet.`
+              } else if (step.error?.includes('multiple elements')) {
+                prompt += `\n- Step ${step.stepNumber}: Selector "${step.args}" matched multiple elements. Use a more specific selector.`
+              }
+            }
+          }
         }
 
         if (attempt.claudeAnalysis) {
@@ -733,6 +748,15 @@ DOM INSPECTION RESULTS:
 - Page has ${inspection.structure.headings.length} headings, ${inspection.structure.links.length} links
 
 ${digestInfo}
+
+${inspection.visibility?.hiddenElements?.length > 0 ? `
+VISIBILITY ANALYSIS:
+Hidden elements detected:
+${inspection.visibility.hiddenElements.map(h => `- ${h.selector}: ${h.reason}`).join('\n')}
+
+Potential reveal triggers:
+${inspection.visibility.revealTriggers.map(t => `- Click "${t.triggerSelector}" to ${t.action}`).join('\n')}
+` : ''}
 
 Suggestions:
 ${inspection.suggestions.join('\n')}

@@ -13,7 +13,11 @@ export interface DOMInspectionResult {
     headings: { level: string; text: string; selector: string }[];
     links: { text: string; href: string; selector: string }[];
     buttons: { text: string; selector: string }[];
-    inputs: { type: string; name?: string; placeholder?: string; selector: string }[];
+    inputs: { type: string; name?: string; placeholder?: string; selector: string; visible?: boolean }[];
+  };
+  visibility: {
+    hiddenElements: { selector: string; reason: string }[];
+    revealTriggers: { triggerSelector: string; targetSelector: string; action: string }[];
   };
   suggestions: string[];
   digest?: DOMDigest;
@@ -40,6 +44,15 @@ export class DOMInspector {
           if (classes.length > 0) return `.${classes.join('.')}`;
         }
         return el.tagName.toLowerCase();
+      };
+
+      // Helper to check if element is visible
+      const isElementVisible = (el: Element): boolean => {
+        const style = window.getComputedStyle(el);
+        return style.display !== 'none' && 
+               style.visibility !== 'hidden' && 
+               style.opacity !== '0' &&
+               el.clientHeight > 0;
       };
 
       // Find common patterns
@@ -140,15 +153,50 @@ export class DOMInspector {
           type: (i as HTMLInputElement).type || i.tagName.toLowerCase(),
           name: (i as HTMLInputElement).name || undefined,
           placeholder: (i as HTMLInputElement).placeholder || undefined,
-          selector: getSelector(i)
+          selector: getSelector(i),
+          visible: isElementVisible(i)
         })).slice(0, 10)
       };
+
+      // Analyze visibility patterns
+      const visibility = {
+        hiddenElements: [] as { selector: string; reason: string }[],
+        revealTriggers: [] as { triggerSelector: string; targetSelector: string; action: string }[]
+      };
+
+      // Check for hidden inputs and their potential triggers
+      structure.inputs.forEach(input => {
+        if (!input.visible && input.selector) {
+          visibility.hiddenElements.push({
+            selector: input.selector,
+            reason: 'Input element exists but is not visible'
+          });
+
+          // Look for nearby buttons/icons that might reveal it
+          const nearbyButtons = Array.from(document.querySelectorAll('button, [role="button"], svg, i'))
+            .filter(btn => {
+              const btnText = btn.textContent?.toLowerCase() || '';
+              const btnClass = btn.className?.toString().toLowerCase() || '';
+              return btnText.includes('search') || btnClass.includes('search') || 
+                     btnClass.includes('magnif') || btnClass.includes('glass');
+            });
+
+          if (nearbyButtons.length > 0) {
+            visibility.revealTriggers.push({
+              triggerSelector: getSelector(nearbyButtons[0]),
+              targetSelector: input.selector,
+              action: 'click to reveal hidden input'
+            });
+          }
+        }
+      });
 
       return {
         commonSelectors,
         withText,
         dataAttributes,
-        structure
+        structure,
+        visibility
       };
     });
 
@@ -162,6 +210,7 @@ export class DOMInspector {
         dataAttributes: inspection.dataAttributes as string[]
       },
       structure: inspection.structure,
+      visibility: inspection.visibility,
       suggestions
     };
   }
