@@ -10,8 +10,14 @@ const args = process.argv.slice(2)
 const fs = require('fs')
 const path = require('path')
 
+// Special oclif commands that should not be treated as AI instructions
+const specialCommands = ['help', '--help', '-h', '--version', '-v', 'version', 'commands', 'plugins']
+
 const commandsDir = path.join(__dirname, '..', 'dist', 'commands')
-const isKnownCommand = args[0] && fs.existsSync(path.join(commandsDir, args[0] + '.js'))
+const isKnownCommand = args[0] && (
+  specialCommands.includes(args[0]) || 
+  fs.existsSync(path.join(commandsDir, args[0] + '.js'))
+)
 
 if (args.length === 0 || (args[0] && !isKnownCommand)) {
   // No command provided or first arg is not a known command

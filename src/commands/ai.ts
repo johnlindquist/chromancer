@@ -347,16 +347,34 @@ Consider using broader selectors first to test, then narrow down.`
   }
 
   private async executeWorkflow(yamlText: string, flags: any, instruction?: string): Promise<WorkflowExecutionResult> {
-    // Connect to Chrome
-    await this.connectToChrome(
-      flags.port,
-      flags.host,
-      flags.launch,
-      flags.profile,
-      flags.headless,
-      flags.verbose,
-      flags.keepOpen
-    )
+    // Try to connect to Chrome, auto-launch if needed
+    try {
+      await this.connectToChrome(
+        flags.port,
+        flags.host,
+        flags.launch,
+        flags.profile,
+        flags.headless,
+        flags.verbose,
+        flags.keepOpen
+      )
+    } catch (error) {
+      // If connection failed and launch wasn't already true, try auto-launching
+      if (!flags.launch) {
+        this.log('🚀 No Chrome instance found. Auto-launching Chrome...')
+        await this.connectToChrome(
+          flags.port,
+          flags.host,
+          true, // Force launch
+          flags.profile,
+          flags.headless,
+          flags.verbose,
+          flags.keepOpen
+        )
+      } else {
+        throw error
+      }
+    }
 
     if (!this.page) {
       this.error('Failed to connect to Chrome')
@@ -449,15 +467,29 @@ Consider using broader selectors first to test, then narrow down.`
       }
     }
 
-    // Show options to user
-    const choices = [
+    // Build menu choices with suggestions as first options
+    const choices = []
+    
+    // Add suggestion-based choices first
+    if (verification && verification.suggestions && verification.suggestions.length > 0) {
+      verification.suggestions.slice(0, 3).forEach((suggestion, index) => {
+        choices.push({
+          name: `💡 ${index + 1}. ${suggestion}`,
+          value: `suggestion_${index}`
+        })
+      })
+      choices.push({ name: '─────────────────', value: 'separator', disabled: true })
+    }
+    
+    // Add standard choices
+    choices.push(
       { name: '🔧 Autofix - Let Claude try again with improvements', value: 'autofix' },
-      { name: '✏️  Modify prompt - Change what you\'re asking for', value: 'modify' },
+      { name: '✏️ Modify prompt - Change what you\'re asking for', value: 'modify' },
       { name: '➕ Append to prompt - Add more details', value: 'append' },
       { name: '🎯 Refine selectors - Help Claude find the right elements', value: 'refine' },
       { name: '💾 Save anyway - Keep current workflow', value: 'save' },
       { name: '🚪 Exit without saving', value: 'quit' }
-    ]
+    )
 
     const { action } = await inquirer.prompt([{
       type: 'list',
@@ -465,6 +497,20 @@ Consider using broader selectors first to test, then narrow down.`
       message: 'The workflow needs improvement. What would you like to do?',
       choices
     }])
+
+    // Handle suggestion selections
+    if (action.startsWith('suggestion_')) {
+      const suggestionIndex = parseInt(action.split('_')[1])
+      const suggestion = verification!.suggestions![suggestionIndex]
+      
+      const appendedInstruction = `${originalInstruction}. ${suggestion}`
+      this.log(`\n📝 Applying suggestion: "${suggestion}"`)
+      this.log(`Updated instruction: "${appendedInstruction}"`)
+      
+      // Keep previous attempts for context
+      await this.attemptWorkflow(appendedInstruction, flags, this.attempts)
+      return
+    }
 
     switch (action) {
       case 'autofix':
@@ -682,15 +728,20 @@ Please provide:
 1. A brief analysis (2-3 sentences) of the results
 2. Whether it was successful (true/false)
 3. A reason why it succeeded or failed
-4. If failed, specific suggestions for improvement
+4. If failed, EXACTLY 3 specific, actionable suggestions that can be directly appended to the original instruction
 
 Format your response as JSON:
 {
   "success": boolean,
   "analysis": "Your 2-3 sentence analysis",
   "reason": "Brief reason for success/failure",
-  "suggestions": ["suggestion 1", "suggestion 2"] // only if failed
+  "suggestions": ["actionable suggestion 1", "actionable suggestion 2", "actionable suggestion 3"] // REQUIRED if failed, must be 3 items
 }
+
+IMPORTANT for suggestions:
+- Each suggestion must be a complete instruction that can be appended to the original command
+- Make them specific and actionable (e.g., "Press Enter key after typing instead of clicking button")
+- Do NOT use vague language like "try different selector" - be specific about what to try
 `
 
     try {

@@ -42,7 +42,9 @@
       "Bash(true)",
       "Bash(./test-exit-behavior.sh:*)",
       "Bash(cat:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(pnpm link:*)",
+      "Bash(find:*)"
     ],
     "deny": []
   }
