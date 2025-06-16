@@ -196,7 +196,7 @@ OUTPUT RULES:
 
 AVAILABLE COMMANDS:
 - navigate/goto: Visit a URL
-- click: Click an element (selector or {selector, button, clickCount})
+- click: Click an element (selector or {selector, button, clickCount, force: true})
 - type: Type text ({selector, text} or "selector text")
 - wait: Wait for element/URL ({selector, timeout} or {url, timeout})
 - screenshot: Take screenshot (filename or {path, fullPage})
@@ -206,6 +206,7 @@ AVAILABLE COMMANDS:
 - select: Select dropdown option ({selector, value/label/index})
 - fill: Fill form field ({selector, value})
 - assert: Assert condition ({selector, text/value/visible})
+- keypress: Press keyboard key (key string like "Enter", "Tab", "Escape")
 
 IMPORTANT DATA EXTRACTION RULES:
 - When user asks to "scrape", "grab", "extract", or "get" data, ALWAYS use evaluate
@@ -225,6 +226,18 @@ IMPORTANT DATA EXTRACTION RULES:
           }))
 - The data will be automatically displayed and saved to a file
 - Format (JSON/CSV/text) is handled automatically based on user request
+
+SEARCH HANDLING TIPS:
+- Many sites hide search inputs until a search icon/button is clicked first
+- If you get "element is not visible" errors on search inputs:
+  1. First click any search icon/button (often with magnifying glass icon)
+  2. Wait for the search input to become visible
+  3. Then type in the search input
+- Common search patterns:
+  - Click search icon → type in revealed input → press Enter
+  - Type directly in visible search bar → press Enter or click submit
+  - Navigate directly to search URL with query parameter
+- For egghead.io specifically: click the search icon first to reveal the input
 
 SEARCH RESULT EXTRACTION TIPS:
 - Google search results are typically in '.g' containers
@@ -398,7 +411,7 @@ Consider using broader selectors first to test, then narrow down.`
     // Create run log
     try {
       await this.runLogManager.init()
-      const currentUrl = await this.page.url()
+      const currentUrl = this.page.url()
       const digest = await this.digestCollector.collect()
 
       const runLog = await this.runLogManager.createRunLog(result, {
@@ -873,7 +886,7 @@ IMPORTANT for suggestions:
         if (!this.page) {
           this.error('No active page connection')
         }
-        const currentUrl = await this.page.url()
+        const currentUrl = this.page.url()
         this.log(`📍 Current page: ${currentUrl}`)
 
         const { continuationInstruction } = await inquirer.prompt([{
@@ -911,7 +924,7 @@ IMPORTANT for suggestions:
     if (!this.page) {
       this.error('No active page connection')
     }
-    const currentUrl = await this.page.url()
+    const currentUrl = this.page.url()
     const pageTitle = await this.page?.title() ?? ''
 
     const continuationPrompt = `You are continuing an existing workflow. The user has navigated to an interesting page and wants to extend the workflow from there.
