@@ -8,6 +8,7 @@ import { RunLogManager } from "../utils/run-log.js"
 import { DOMDigestCollector } from "../utils/dom-digest.js"
 import * as yaml from "yaml"
 import inquirer from "inquirer"
+import ora from "ora"
 import type { WorkflowExecutionResult } from "../types/workflow.js"
 
 interface WorkflowAttempt {
@@ -118,10 +119,11 @@ ${instruction}
 
     const fullPrompt = `${systemPrompt}\n\n${structuredInstruction}`
 
-    this.log("🤖 Asking Claude...")
+    const claudeSpinner = ora('🤖 Asking Claude...').start()
 
     try {
       const raw = await askClaude(fullPrompt)
+      claudeSpinner.succeed('🤖 Claude responded')
       const yamlText = this.cleanYamlOutput(raw)
 
       // Validate YAML
@@ -178,6 +180,7 @@ ${instruction}
       }
 
     } catch (error) {
+      claudeSpinner.fail('🤖 Claude request failed')
       const errorMessage = error instanceof Error ? error.message : String(error)
       this.error(`Error: ${errorMessage}`)
     }
@@ -440,10 +443,41 @@ Consider using broader selectors first to test, then narrow down.`
 
     // Execute with WorkflowExecutor
     const executor = new WorkflowExecutor(this.page, instruction)
+    
+    let currentStepSpinner: any = null
+    
     const result = await executor.execute(workflow, {
       strict: false, // Don't stop on errors, we want to see all results
-      captureOutput: true
+      captureOutput: true,
+      onStepStart: (stepNumber, command, args) => {
+        // Stop previous spinner if exists
+        if (currentStepSpinner) {
+          currentStepSpinner.stop()
+        }
+        
+        // Format args for display
+        const argsDisplay = typeof args === 'string' 
+          ? args.substring(0, 50) + (args.length > 50 ? '...' : '')
+          : args.selector || args.url || JSON.stringify(args).substring(0, 50)
+        
+        currentStepSpinner = ora(`Step ${stepNumber}: ${command} ${argsDisplay}`).start()
+      },
+      onStepComplete: (stepNumber, command, success) => {
+        if (currentStepSpinner) {
+          if (success) {
+            currentStepSpinner.succeed(`Step ${stepNumber}: ${command} ✓`)
+          } else {
+            currentStepSpinner.fail(`Step ${stepNumber}: ${command} ✗`)
+          }
+          currentStepSpinner = null
+        }
+      }
     })
+    
+    // Clean up any remaining spinner
+    if (currentStepSpinner) {
+      currentStepSpinner.stop()
+    }
 
     // Create run log
     try {
@@ -499,8 +533,9 @@ Consider using broader selectors first to test, then narrow down.`
         lastAttempt.yaml
       )}\n\nProvide a brief analysis of what went wrong and what should be changed.`
 
-      this.log("\n🔍 Analyzing results...")
+      const analysisSpinner = ora('🔍 Analyzing results...').start()
       const analysis = await askClaude(analysisPrompt)
+      analysisSpinner.succeed('🔍 Analysis complete')
       lastAttempt.claudeAnalysis = analysis
 
       this.log("\n💡 Claude's analysis:")
@@ -744,9 +779,10 @@ Consider using broader selectors first to test, then narrow down.`
     // If data extraction failed, do DOM inspection
     let domAnalysis = '';
     if (isDataExtraction && hasEmptyData && this.page) {
-      this.log("\n🔍 Inspecting page structure to find better selectors...");
+      const inspectSpinner = ora('🔍 Inspecting page structure to find better selectors...').start();
       const inspector = new DOMInspector(this.page);
       const inspection = await inspector.inspectWithDigest(instruction);
+      inspectSpinner.succeed('🔍 Page inspection complete');
 
       // Format digest for Claude if available
       let digestInfo = '';

@@ -5,6 +5,7 @@ import * as path from 'path'
 import * as os from 'os'
 import { displayErrorWithTip, enhanceError } from './utils/error-tips.js'
 import { scanForChromeInstances } from './utils/chrome-scanner.js'
+import ora from 'ora'
 
 export abstract class BaseCommand extends Command {
   static baseFlags = {
@@ -102,17 +103,17 @@ export abstract class BaseCommand extends Command {
     
     const browserURL = `http://${host}:${port}`
     
+    const connectSpinner = ora(`🔍 Attempting to connect to Chrome at ${browserURL}...`).start()
+    
     try {
       // First try to connect to existing Chrome instance
-      this.log(`🔍 Attempting to connect to Chrome at ${browserURL}...`)
-      
       this.browser = await chromium.connectOverCDP(browserURL)
       this.context = this.browser.contexts()[0]
       
-      this.log('✅ Connected to existing Chrome instance')
+      connectSpinner.succeed('✅ Connected to existing Chrome instance')
       this.logVerbose(`Connection successful in ${Date.now() - startTime}ms`)
     } catch (connectError: any) {
-      this.log(`❌ No existing Chrome instance found at ${browserURL}`)
+      connectSpinner.fail(`❌ No existing Chrome instance found at ${browserURL}`)
       this.logVerbose('Connection failed', { error: connectError.message })
       
       // Scan for Chrome instances on other ports

@@ -15,6 +15,8 @@ interface WorkflowOptions {
   variables?: Record<string, string>;
   timeout?: number;
   captureOutput?: boolean;
+  onStepStart?: (stepNumber: number, command: string, args: any) => void;
+  onStepComplete?: (stepNumber: number, command: string, success: boolean) => void;
 }
 
 export class WorkflowExecutor {
@@ -47,6 +49,11 @@ export class WorkflowExecutor {
       let success = false;
       let output: string | undefined;
       let error: string | undefined;
+
+      // Notify step start
+      if (options.onStepStart) {
+        options.onStepStart(stepNumber, command, args);
+      }
 
       try {
         output = await this.executeStep(command, args, options);
@@ -93,6 +100,11 @@ export class WorkflowExecutor {
         duration: Date.now() - stepStartTime
       });
 
+      // Notify step complete
+      if (options.onStepComplete) {
+        options.onStepComplete(stepNumber, command, success);
+      }
+
       // Add small delay between steps
       await this.page.waitForTimeout(100);
     }
@@ -112,7 +124,7 @@ export class WorkflowExecutor {
     args: any,
     options: WorkflowOptions
   ): Promise<string | undefined> {
-    const timeout = options.timeout || 30000;
+    const timeout = options.timeout || 5000; // Changed from 30s to 5s
     let output: string | undefined;
 
     switch (command) {
