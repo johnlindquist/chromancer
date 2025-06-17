@@ -89,24 +89,92 @@ export default class AI extends BaseCommand {
         const inspector = new DOMInspector(this.page)
         const inspection = await inspector.inspectForDataExtraction('')
         
+        // Get page context
+        const pageUrl = this.page.url()
+        const pageTitle = await this.page.title()
+        
+        // Check for common issues
+        const pageChecks = await this.page.evaluate(() => {
+          const checks: any = {
+            hasModals: !!document.querySelector('[role="dialog"], .modal, .popup, [class*="modal"][style*="display: block"]'),
+            hasOverlay: !!document.querySelector('.overlay:not([style*="display: none"]), .backdrop:not([style*="display: none"])'),
+            hasLoader: !!document.querySelector('.loader:not([style*="display: none"]), .loading:not([style*="display: none"]), .spinner:not([style*="display: none"])'),
+            hasAlerts: !!document.querySelector('[role="alert"], .alert, .error, .warning'),
+            hasIframes: document.querySelectorAll('iframe').length,
+            formCount: document.querySelectorAll('form').length,
+            disabledButtons: Array.from(document.querySelectorAll('button:disabled, input[type="submit"]:disabled')).length,
+            readonlyInputs: Array.from(document.querySelectorAll('input[readonly], textarea[readonly]')).length
+          }
+          
+          // Get any visible error messages
+          const errorElements = Array.from(document.querySelectorAll('.error, .alert-danger, [class*="error"]:not([style*="display: none"])'))
+          checks.errorMessages = errorElements.slice(0, 3).map(el => el.textContent?.trim()).filter(Boolean)
+          
+          return checks
+        })
+        
         // Format interactive elements for Claude
         const elements: string[] = []
         
-        // Add visible buttons
-        if (inspection.structure.buttons.length > 0) {
-          elements.push('BUTTONS:')
-          inspection.structure.buttons.slice(0, 10).forEach(btn => {
-            elements.push(`  - ${btn.selector}: "${btn.text}"`)
+        // Add page context
+        elements.push(`PAGE CONTEXT:`)
+        elements.push(`  URL: ${pageUrl}`)
+        elements.push(`  Title: ${pageTitle}`)
+        
+        // Add warnings about potential issues
+        if (pageChecks.hasModals || pageChecks.hasOverlay || pageChecks.hasLoader) {
+          elements.push(`\n⚠️  WARNINGS:`)
+          if (pageChecks.hasModals) elements.push(`  - Modal/dialog detected - may block interactions`)
+          if (pageChecks.hasOverlay) elements.push(`  - Overlay detected - may block clicks`)
+          if (pageChecks.hasLoader) elements.push(`  - Loading indicator detected - page may still be loading`)
+        }
+        
+        if (pageChecks.errorMessages && pageChecks.errorMessages.length > 0) {
+          elements.push(`\n❌ ERROR MESSAGES:`)
+          pageChecks.errorMessages.forEach((msg: string) => {
+            elements.push(`  - "${msg}"`)
           })
         }
         
-        // Add visible inputs
+        // Add visible buttons
+        if (inspection.structure.buttons.length > 0) {
+          elements.push('\nBUTTONS:')
+          inspection.structure.buttons.slice(0, 10).forEach(btn => {
+            elements.push(`  - ${btn.selector}: "${btn.text}"`)
+          })
+          if (pageChecks.disabledButtons > 0) {
+            elements.push(`  ⚠️  ${pageChecks.disabledButtons} disabled button(s) detected`)
+          }
+        }
+        
+        // Add inputs with visibility info
         const visibleInputs = inspection.structure.inputs.filter(i => i.visible !== false)
-        if (visibleInputs.length > 0) {
+        const hiddenInputs = inspection.structure.inputs.filter(i => i.visible === false)
+        
+        if (visibleInputs.length > 0 || hiddenInputs.length > 0) {
           elements.push('\nINPUTS:')
           visibleInputs.slice(0, 10).forEach(input => {
             const desc = input.placeholder || input.name || input.type
             elements.push(`  - ${input.selector}: ${desc} (${input.type})`)
+          })
+          if (hiddenInputs.length > 0) {
+            elements.push(`  ⚠️  ${hiddenInputs.length} hidden input(s) - may need to click something to reveal`)
+          }
+          if (pageChecks.readonlyInputs > 0) {
+            elements.push(`  ⚠️  ${pageChecks.readonlyInputs} readonly input(s) detected`)
+          }
+        }
+        
+        // Add info about forms
+        if (pageChecks.formCount > 0) {
+          elements.push(`\n📝 FORMS: ${pageChecks.formCount} form(s) detected`)
+        }
+        
+        // Add hidden element triggers if found
+        if (inspection.visibility?.revealTriggers?.length > 0) {
+          elements.push('\n🔓 TO REVEAL HIDDEN ELEMENTS:')
+          inspection.visibility.revealTriggers.slice(0, 3).forEach(trigger => {
+            elements.push(`  - Click "${trigger.triggerSelector}" to ${trigger.action}`)
           })
         }
         
@@ -118,8 +186,13 @@ export default class AI extends BaseCommand {
           })
         }
         
+        // Add iframe warning
+        if (pageChecks.hasIframes > 0) {
+          elements.push(`\n⚠️  ${pageChecks.hasIframes} iframe(s) detected - elements inside iframes need special handling`)
+        }
+        
         if (elements.length > 0) {
-          domQuickScan = `CURRENT PAGE ELEMENTS:\n${elements.join('\n')}`
+          domQuickScan = elements.join('\n')
         }
         
         quickScanSpinner.succeed('🔍 Page scan complete')
