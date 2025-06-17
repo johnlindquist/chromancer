@@ -8,7 +8,6 @@ import { RunLogManager } from "../utils/run-log.js"
 import { DOMDigestCollector } from "../utils/dom-digest.js"
 import * as yaml from "yaml"
 import inquirer from "inquirer"
-import ora from "ora"
 import type { WorkflowExecutionResult } from "../types/workflow.js"
 
 interface WorkflowAttempt {
@@ -85,6 +84,7 @@ export default class AI extends BaseCommand {
     let domQuickScan: string | undefined
     if (this.page) {
       try {
+        const ora = (await import('ora')).default
         const quickScanSpinner = ora('🔍 Scanning page elements...').start()
         const inspector = new DOMInspector(this.page)
         const inspection = await inspector.inspectForDataExtraction('')
@@ -239,6 +239,7 @@ ${instruction}
 
     const fullPrompt = `${systemPrompt}\n\n${structuredInstruction}`
 
+    const ora = (await import('ora')).default
     const claudeSpinner = ora('🤖 Asking Claude...').start()
 
     try {
@@ -569,6 +570,7 @@ Consider using broader selectors first to test, then narrow down.`
     // Execute with WorkflowExecutor
     const executor = new WorkflowExecutor(this.page, instruction)
     
+    const ora2 = (await import('ora')).default
     let currentStepSpinner: any = null
     
     const result = await executor.execute(workflow, {
@@ -585,7 +587,7 @@ Consider using broader selectors first to test, then narrow down.`
           ? args.substring(0, 50) + (args.length > 50 ? '...' : '')
           : args.selector || args.url || JSON.stringify(args).substring(0, 50)
         
-        currentStepSpinner = ora(`Step ${stepNumber}: ${command} ${argsDisplay}`).start()
+        currentStepSpinner = ora2(`Step ${stepNumber}: ${command} ${argsDisplay}`).start()
       },
       onStepComplete: (stepNumber, command, success) => {
         if (currentStepSpinner) {
@@ -658,7 +660,8 @@ Consider using broader selectors first to test, then narrow down.`
         lastAttempt.yaml
       )}\n\nProvide a brief analysis of what went wrong and what should be changed.`
 
-      const analysisSpinner = ora('🔍 Analyzing results...').start()
+      const ora3 = (await import('ora')).default
+      const analysisSpinner = ora3('🔍 Analyzing results...').start()
       const analysis = await askClaude(analysisPrompt)
       analysisSpinner.succeed('🔍 Analysis complete')
       lastAttempt.claudeAnalysis = analysis
@@ -904,7 +907,8 @@ Consider using broader selectors first to test, then narrow down.`
     // If data extraction failed, do DOM inspection
     let domAnalysis = '';
     if (isDataExtraction && hasEmptyData && this.page) {
-      const inspectSpinner = ora('🔍 Inspecting page structure to find better selectors...').start();
+      const ora4 = (await import('ora')).default
+      const inspectSpinner = ora4('🔍 Inspecting page structure to find better selectors...').start();
       const inspector = new DOMInspector(this.page);
       const inspection = await inspector.inspectWithDigest(instruction);
       inspectSpinner.succeed('🔍 Page inspection complete');

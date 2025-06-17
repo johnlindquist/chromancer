@@ -5,7 +5,6 @@ import * as path from 'path'
 import * as os from 'os'
 import { displayErrorWithTip, enhanceError } from './utils/error-tips.js'
 import { scanForChromeInstances } from './utils/chrome-scanner.js'
-import ora from 'ora'
 
 export abstract class BaseCommand extends Command {
   static baseFlags = {
@@ -103,6 +102,7 @@ export abstract class BaseCommand extends Command {
     
     const browserURL = `http://${host}:${port}`
     
+    const ora = (await import('ora')).default
     const connectSpinner = ora(`🔍 Attempting to connect to Chrome at ${browserURL}...`).start()
     
     try {
