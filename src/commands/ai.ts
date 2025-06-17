@@ -252,6 +252,21 @@ SEARCH RESULT EXTRACTION TIPS:
 
 IMPORTANT: Your output must be valid YAML that starts with a dash (-) for each step.
 
+SELECTOR SYNTAX RULES:
+- ALWAYS use double quotes for attribute selectors: input[type="search"] (NOT input[type='search'])
+- NEVER use escaped quotes like input[type=\'search\'] or input[type=\"search\"]
+- For complex attribute values, keep using double quotes: a[href="https://example.com"]
+- Valid examples:
+  - wait: input[type="search"]
+  - click: button[data-testid="submit"]
+  - type:
+      selector: input[name="username"]
+      text: my text
+- Invalid examples (DO NOT USE):
+  - wait: input[type='search']  # Single quotes will fail
+  - click: input[type=\'search\']  # Escaped quotes will fail
+  - wait: "input[type='search']"  # Wrapping the whole selector in quotes is wrong
+
 LEARNING FROM FAILURES:
 - When you see previous attempts with runtime output, analyze what went wrong
 - DO NOT append to or modify the previous YAML - start completely fresh

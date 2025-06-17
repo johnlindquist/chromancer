@@ -4,6 +4,7 @@ import * as yaml from 'yaml';
 import { DataFormatter } from './data-formatter.js';
 import { RunLogManager } from './run-log.js';
 import { DOMDigest } from './dom-digest.js';
+import { normalizeSelector, isValidSelector, formatSelectorForError, suggestSelectorFix } from './selector-normalizer.js';
 
 interface WorkflowStep {
   [command: string]: any;
@@ -53,6 +54,18 @@ export class WorkflowExecutor {
         successCount++;
       } catch (err) {
         error = err instanceof Error ? err.message : String(err);
+        
+        // Add selector-specific help if this looks like a selector error
+        if (error.includes('selector') || error.includes('waitForSelector') || error.includes('No element matches')) {
+          const selector = this.extractSelectorFromArgs(args);
+          if (selector) {
+            const suggestions = suggestSelectorFix(selector, error);
+            if (suggestions.length > 0) {
+              error += '\n' + suggestions.map(s => `  💡 ${s}`).join('\n');
+            }
+          }
+        }
+        
         failureCount++;
         
         if (options.strict) {
@@ -114,7 +127,13 @@ export class WorkflowExecutor {
         break;
 
       case 'click':
-        const clickSelector = typeof args === 'string' ? args : args.selector;
+        const rawClickSelector = typeof args === 'string' ? args : args.selector;
+        const clickSelector = normalizeSelector(rawClickSelector);
+        
+        if (!isValidSelector(clickSelector)) {
+          throw new Error(`Invalid selector: ${formatSelectorForError(clickSelector)}`);
+        }
+        
         await this.page.click(clickSelector, {
           button: args.button || 'left',
           clickCount: args.clickCount || 1,
@@ -124,9 +143,15 @@ export class WorkflowExecutor {
         break;
 
       case 'type':
-        const typeSelector = typeof args === 'string' 
+        const rawTypeSelector = typeof args === 'string' 
           ? args.split(' ')[0] 
           : args.selector;
+        const typeSelector = normalizeSelector(rawTypeSelector);
+        
+        if (!isValidSelector(typeSelector)) {
+          throw new Error(`Invalid selector: ${formatSelectorForError(typeSelector)}`);
+        }
+        
         const text = typeof args === 'string' 
           ? args.split(' ').slice(1).join(' ')
           : args.text;
@@ -143,17 +168,25 @@ export class WorkflowExecutor {
 
       case 'wait':
         if (typeof args === 'string') {
-          await this.page.waitForSelector(args, { 
+          const waitSelector = normalizeSelector(args);
+          if (!isValidSelector(waitSelector)) {
+            throw new Error(`Invalid selector: ${formatSelectorForError(waitSelector)}`);
+          }
+          await this.page.waitForSelector(waitSelector, { 
             state: 'visible',
             timeout 
           });
-          output = `Waited for selector: ${args}`;
+          output = `Waited for selector: ${waitSelector}`;
         } else if (args.selector) {
-          await this.page.waitForSelector(args.selector, {
+          const waitSelector = normalizeSelector(args.selector);
+          if (!isValidSelector(waitSelector)) {
+            throw new Error(`Invalid selector: ${formatSelectorForError(waitSelector)}`);
+          }
+          await this.page.waitForSelector(waitSelector, {
             state: args.state || 'visible',
             timeout: args.timeout || timeout,
           });
-          output = `Waited for selector: ${args.selector}`;
+          output = `Waited for selector: ${waitSelector}`;
         } else if (args.time || args.ms) {
           const ms = args.time || args.ms;
           await this.page.waitForTimeout(ms);
@@ -229,17 +262,27 @@ export class WorkflowExecutor {
           await this.page.evaluate(`window.scrollTo(0, document.body.scrollHeight * ${percentage} / 100)`);
           output = `Scrolled to ${percentage}%`;
         } else if (args.selector) {
+          const scrollSelector = normalizeSelector(args.selector);
+          if (!isValidSelector(scrollSelector)) {
+            throw new Error(`Invalid selector: ${formatSelectorForError(scrollSelector)}`);
+          }
           await this.page.evaluate(({ selector }) => {
             document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth' });
-          }, { selector: args.selector });
-          output = `Scrolled to ${args.selector}`;
+          }, { selector: scrollSelector });
+          output = `Scrolled to ${scrollSelector}`;
         }
         break;
 
       case 'select':
-        const selectSelector = typeof args === 'string' 
+        const rawSelectSelector = typeof args === 'string' 
           ? args.split(' ')[0]
           : args.selector;
+        const selectSelector = normalizeSelector(rawSelectSelector);
+        
+        if (!isValidSelector(selectSelector)) {
+          throw new Error(`Invalid selector: ${formatSelectorForError(selectSelector)}`);
+        }
+        
         const value = typeof args === 'string'
           ? args.split(' ').slice(1).join(' ')
           : args.value;
@@ -249,7 +292,13 @@ export class WorkflowExecutor {
         break;
 
       case 'hover':
-        const hoverSelector = typeof args === 'string' ? args : args.selector;
+        const rawHoverSelector = typeof args === 'string' ? args : args.selector;
+        const hoverSelector = normalizeSelector(rawHoverSelector);
+        
+        if (!isValidSelector(hoverSelector)) {
+          throw new Error(`Invalid selector: ${formatSelectorForError(hoverSelector)}`);
+        }
+        
         await this.page.hover(hoverSelector, {
           timeout,
           position: args.position,
@@ -280,6 +329,20 @@ export class WorkflowExecutor {
     }
     
     return args;
+  }
+
+  private extractSelectorFromArgs(args: any): string | null {
+    if (typeof args === 'string') {
+      // For string args, the selector is usually the first part
+      return args.split(' ')[0] || args;
+    }
+    
+    if (typeof args === 'object' && args !== null) {
+      // Look for common selector properties
+      return args.selector || args.target || args.element || null;
+    }
+    
+    return null;
   }
 
   // Helper to format results for Claude

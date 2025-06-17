@@ -1,0 +1,23 @@
+# Example workflows demonstrating proper selector syntax
+
+# Correct: Use double quotes for attribute values
+- navigate: https://example.com
+- wait: input[type="search"]
+- click: button[data-testid="submit"]
+- type:
+    selector: input[name="username"]
+    text: myuser
+
+# These will be automatically normalized:
+# - Single quotes: input[type='search'] → input[type="search"]
+# - No quotes: input[type=search] → input[type="search"]
+# - Escaped quotes: input[type=\'search\'] → input[type="search"]
+
+# Complex selectors
+- click: a[href="https://example.com/path?param=value"]
+- wait: div[data-visible="true"][data-loaded="true"]
+- evaluate: |
+    Array.from(document.querySelectorAll('article[class*="news"]')).map(el => ({
+      title: el.querySelector('h2').textContent,
+      link: el.querySelector('a').href
+    }))
