@@ -16,6 +16,7 @@ interface WorkflowAttempt {
   result?: WorkflowExecutionResult
   claudeAnalysis?: string
   runLogId?: string
+  fullOutput?: string        // Complete stdout/stderr from the run
 }
 
 interface VerificationResult {
@@ -102,28 +103,17 @@ export default class AI extends BaseCommand {
     // Structure the instruction based on whether this is a retry
     let structuredInstruction = ''
     if (previousAttempts && previousAttempts.length > 0) {
-      // Extract original instruction from the first attempt
-      const originalInstruction = previousAttempts[0].prompt
+      // Tell Claude the earlier guidance FAILED and must be replaced
+      structuredInstruction = `
+The previous instructions did NOT work - throw them away.
+Write a BRAND-NEW YAML workflow that satisfies the user request below
+using what you learned from the runtime output.
 
-      // Check if current instruction is different (has been appended/modified)
-      if (instruction !== originalInstruction) {
-        // Extract the follow-up part
-        const followUpPart = instruction.replace(originalInstruction, '').replace(/^[.\s]+/, '')
-
-        structuredInstruction = `<original-instruction>
-${originalInstruction}
-</original-instruction>
-
-<follow-up-instruction>
-${followUpPart}
-</follow-up-instruction>
-
-Note: The original instruction failed. The user has provided additional clarification above.`
-      } else {
-        structuredInstruction = `User instruction: ${instruction}`
-      }
+<user-request>
+${instruction}
+</user-request>`
     } else {
-      structuredInstruction = `User instruction: ${instruction}`
+      structuredInstruction = `User request:\n${instruction}`
     }
 
     const fullPrompt = `${systemPrompt}\n\n${structuredInstruction}`
@@ -148,11 +138,21 @@ Note: The original instruction failed. The user has provided additional clarific
       // Execute workflow
       const result = await this.executeWorkflow(yamlText, flags, instruction)
 
+      // Grab a verbatim, line-by-line dump for Claude
+      const fullOutput = result.steps
+        .map(s => {
+          const status = s.success ? '✅' : '❌'
+          const details = s.output ?? s.error ?? 'No output'
+          return `[${status}] Step ${s.stepNumber} - ${s.command}: ${details}`
+        })
+        .join('\n')
+
       // Store this attempt
       const attempt: WorkflowAttempt = {
         prompt: instruction,
         yaml: yamlText,
-        result
+        result,
+        fullOutput
       }
       this.attempts.push(attempt)
 
@@ -252,21 +252,28 @@ SEARCH RESULT EXTRACTION TIPS:
 
 IMPORTANT: Your output must be valid YAML that starts with a dash (-) for each step.
 
-INSTRUCTION HANDLING:
-- If you receive <original-instruction> and <follow-up-instruction> tags, this means:
-  - The original instruction was attempted but failed or was incomplete
-  - The user has provided additional clarification in the follow-up
-  - You should consider BOTH parts to understand the full intent
-  - Focus on addressing what was missing or unclear from the first attempt`
+LEARNING FROM FAILURES:
+- When you see previous attempts with runtime output, analyze what went wrong
+- DO NOT append to or modify the previous YAML - start completely fresh
+- Use the runtime errors to understand what selectors/approaches don't work
+- Apply lessons learned to create a working solution from scratch`
 
     // Add context from previous attempts
     if (previousAttempts && previousAttempts.length > 0) {
       prompt += "\n\nPREVIOUS ATTEMPTS AND RESULTS:"
 
-      previousAttempts.forEach((attempt, index) => {
-        prompt += `\n\nAttempt ${index + 1}:\n`
-        prompt += `YAML:\n${attempt.yaml}\n`
+      previousAttempts.forEach((attempt, idx) => {
+        prompt += `\n\n🕑 Attempt ${idx + 1}`
 
+        // 1. The YAML Claude produced
+        prompt += `\n--- YAML (attempt ${idx + 1}) ---\n${attempt.yaml}\n`
+
+        // 2. The verbatim run output (every step)
+        if (attempt.fullOutput) {
+          prompt += `\n--- Runtime output (attempt ${idx + 1}) ---\n${attempt.fullOutput}\n`
+        }
+
+        // 3. Short structured analysis (kept for backward-compat)
         if (attempt.result) {
           prompt += WorkflowExecutor.formatResultsForAnalysis(
             attempt.result,
