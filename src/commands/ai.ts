@@ -81,6 +81,53 @@ export default class AI extends BaseCommand {
   }
 
   private async attemptWorkflow(instruction: string, flags: Record<string, unknown>, previousAttempts?: WorkflowAttempt[]): Promise<void> {
+    // Quick DOM scan if we're already connected to a page
+    let domQuickScan: string | undefined
+    if (this.page) {
+      try {
+        const quickScanSpinner = ora('🔍 Scanning page elements...').start()
+        const inspector = new DOMInspector(this.page)
+        const inspection = await inspector.inspectForDataExtraction('')
+        
+        // Format interactive elements for Claude
+        const elements: string[] = []
+        
+        // Add visible buttons
+        if (inspection.structure.buttons.length > 0) {
+          elements.push('BUTTONS:')
+          inspection.structure.buttons.slice(0, 10).forEach(btn => {
+            elements.push(`  - ${btn.selector}: "${btn.text}"`)
+          })
+        }
+        
+        // Add visible inputs
+        const visibleInputs = inspection.structure.inputs.filter(i => i.visible !== false)
+        if (visibleInputs.length > 0) {
+          elements.push('\nINPUTS:')
+          visibleInputs.slice(0, 10).forEach(input => {
+            const desc = input.placeholder || input.name || input.type
+            elements.push(`  - ${input.selector}: ${desc} (${input.type})`)
+          })
+        }
+        
+        // Add links if relevant
+        if (inspection.structure.links.length > 0) {
+          elements.push('\nLINKS:')
+          inspection.structure.links.slice(0, 5).forEach(link => {
+            elements.push(`  - ${link.selector}: "${link.text}"`)
+          })
+        }
+        
+        if (elements.length > 0) {
+          domQuickScan = `CURRENT PAGE ELEMENTS:\n${elements.join('\n')}`
+        }
+        
+        quickScanSpinner.succeed('🔍 Page scan complete')
+      } catch (error) {
+        // Ignore scan errors
+      }
+    }
+
     // Collect DOM digest if we're already connected and have failures
     let domDigest: string | undefined
     if (this.page && previousAttempts && previousAttempts.length > 0) {
@@ -99,7 +146,7 @@ export default class AI extends BaseCommand {
     }
 
     // Build system prompt with context from previous attempts
-    const systemPrompt = this.buildSystemPrompt(previousAttempts, domDigest)
+    const systemPrompt = this.buildSystemPrompt(previousAttempts, domDigest, domQuickScan)
 
     // Structure the instruction based on whether this is a retry
     let structuredInstruction = ''
@@ -186,7 +233,7 @@ ${instruction}
     }
   }
 
-  private buildSystemPrompt(previousAttempts?: WorkflowAttempt[], domDigest?: string): string {
+  private buildSystemPrompt(previousAttempts?: WorkflowAttempt[], domDigest?: string, domQuickScan?: string): string {
     let prompt = `You are an expert Chromancer automation engineer. Convert the user's natural language instruction into a valid YAML workflow.
 
 OUTPUT RULES:
@@ -275,6 +322,11 @@ LEARNING FROM FAILURES:
 - DO NOT append to or modify the previous YAML - start completely fresh
 - Use the runtime errors to understand what selectors/approaches don't work
 - Apply lessons learned to create a working solution from scratch`
+
+    // Add current page context if available
+    if (domQuickScan) {
+      prompt += `\n\n${domQuickScan}\n\nIMPORTANT: Use the exact selectors shown above when interacting with these elements.`
+    }
 
     // Add context from previous attempts
     if (previousAttempts && previousAttempts.length > 0) {
