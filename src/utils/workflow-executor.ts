@@ -5,6 +5,7 @@ import { DataFormatter } from './data-formatter.js';
 import { RunLogManager } from './run-log.js';
 import { DOMDigest } from './dom-digest.js';
 import { normalizeSelector, isValidSelector, formatSelectorForError, suggestSelectorFix } from './selector-normalizer.js';
+import { DOMInspector } from './dom-inspector.js';
 
 interface WorkflowStep {
   [command: string]: any;
@@ -135,7 +136,61 @@ export class WorkflowExecutor {
           waitUntil: args.waitUntil || 'load',
           timeout 
         });
-        output = `Navigated to ${url}`;
+        
+        // Perform quick DOM scan after navigation
+        try {
+          const inspector = new DOMInspector(this.page);
+          const inspection = await inspector.inspectForDataExtraction('');
+          
+          const pageContext: string[] = [`Navigated to ${url}`];
+          
+          // Add current page info
+          pageContext.push(`\nPAGE CONTEXT:`);
+          pageContext.push(`  URL: ${this.page.url()}`);
+          pageContext.push(`  Title: ${await this.page.title()}`);
+          
+          // Check for common issues
+          const pageChecks = await this.page.evaluate(() => {
+            return {
+              hasModals: !!document.querySelector('[role="dialog"], .modal, .popup, [class*="modal"][style*="display: block"]'),
+              hasOverlay: !!document.querySelector('.overlay:not([style*="display: none"]), .backdrop:not([style*="display: none"])'),
+              errorMessages: Array.from(document.querySelectorAll('.error:not([style*="display: none"]), .alert-danger:not([style*="display: none"])')).slice(0, 2).map(el => el.textContent?.trim()).filter(Boolean)
+            };
+          });
+          
+          if (pageChecks.hasModals || pageChecks.hasOverlay) {
+            pageContext.push(`\n⚠️  WARNINGS:`);
+            if (pageChecks.hasModals) pageContext.push(`  - Modal/dialog detected`);
+            if (pageChecks.hasOverlay) pageContext.push(`  - Overlay detected`);
+          }
+          
+          if (pageChecks.errorMessages.length > 0) {
+            pageContext.push(`\n❌ ERRORS:`);
+            pageChecks.errorMessages.forEach(msg => pageContext.push(`  - "${msg}"`));
+          }
+          
+          // Show available elements
+          if (inspection.structure.buttons.length > 0) {
+            pageContext.push(`\nAVAILABLE BUTTONS:`);
+            inspection.structure.buttons.slice(0, 5).forEach(btn => {
+              pageContext.push(`  - ${btn.selector}: "${btn.text}"`);
+            });
+          }
+          
+          const visibleInputs = inspection.structure.inputs.filter(i => i.visible !== false);
+          if (visibleInputs.length > 0) {
+            pageContext.push(`\nAVAILABLE INPUTS:`);
+            visibleInputs.slice(0, 5).forEach(input => {
+              const desc = input.placeholder || input.name || input.type;
+              pageContext.push(`  - ${input.selector}: ${desc}`);
+            });
+          }
+          
+          output = pageContext.join('\n');
+        } catch (scanError) {
+          // If scan fails, just use basic navigation message
+          output = `Navigated to ${url}`;
+        }
         break;
 
       case 'click':
