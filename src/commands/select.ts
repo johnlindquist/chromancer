@@ -204,16 +204,11 @@ export default class Select extends BaseCommand {
           }
         })
         
-        const inquirer = await import('inquirer')
-        const { selectedSelector } = await inquirer.default.prompt([
-          {
-            type: 'list',
-            name: 'selectedSelector',
-            message: 'Select an element to copy its selector:',
-            choices,
-            pageSize: 15,
-          },
-        ])
+        const { select } = await import('@inquirer/prompts')
+        const selectedSelector = await select({
+          message: 'Select an element to copy its selector:',
+          choices: choices.map(c => ({ name: c.name, value: c.value }))
+        })
         
         try {
           await clipboardy.write(selectedSelector)

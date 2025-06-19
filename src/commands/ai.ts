@@ -7,7 +7,7 @@ import { DOMInspector } from "../utils/dom-inspector.js"
 import { RunLogManager } from "../utils/run-log.js"
 import { DOMDigestCollector } from "../utils/dom-digest.js"
 import * as yaml from "yaml"
-import inquirer from "inquirer"
+import { input, confirm, select } from "@inquirer/prompts"
 import type { WorkflowExecutionResult } from "../types/workflow.js"
 
 interface WorkflowAttempt {
@@ -54,6 +54,11 @@ export default class AI extends BaseCommand {
     "auto-inspect": Flags.boolean({
       description: "Automatically inspect DOM when selectors fail",
       default: true,
+    }),
+    "early-bailout": Flags.boolean({
+      description: "Stop execution immediately when a step fails",
+      default: true,
+      allowNo: true,
     }),
   }
 
@@ -329,7 +334,7 @@ AVAILABLE COMMANDS:
 - navigate/goto: Visit a URL
 - click: Click an element (selector or {selector, button, clickCount, force: true})
 - type: Type text ({selector, text} or "selector text")
-- wait: Wait for element/URL ({selector, timeout} or {url, timeout})
+- wait: Wait for element/URL ({selector, timeout} or {url, timeout} or {message: "custom message"} for user input)
 - screenshot: Take screenshot (filename or {path, fullPage})
 - scroll: Scroll page ({to: percentage} or {selector})
 - evaluate: Run JavaScript ({script} or script string) - USE THIS FOR DATA EXTRACTION/SCRAPING
@@ -382,6 +387,17 @@ SEARCH RESULT EXTRACTION TIPS:
 - To get actual search results, skip the first few elements if they're profiles
 
 IMPORTANT: Your output must be valid YAML that starts with a dash (-) for each step.
+
+INTERACTIVE WAIT USAGE:
+- When user asks to "wait for me to sign in" or "pause for manual action", use: 
+  - wait: {message: "Press Enter when you have signed in"}
+- This will pause the workflow and display the message in the terminal
+- The user can then perform manual actions in the browser
+- The workflow continues when the user presses Enter
+- Examples:
+  - wait: {message: "Press Enter after completing 2FA"}
+  - wait: {message: "Press Enter when you've accepted cookies"}
+  - wait: {message: "Sign in to your account and press Enter to continue"}
 
 SELECTOR SYNTAX RULES:
 - ALWAYS use double quotes for attribute selectors: input[type="search"] (NOT input[type='search'])
@@ -579,34 +595,67 @@ Consider using broader selectors first to test, then narrow down.`
     
     const ora2 = (await import('ora')).default
     let currentStepSpinner: any = null
+    let result: WorkflowExecutionResult
+    const executionStartTime = Date.now()
     
-    const result = await executor.execute(workflow, {
-      strict: false, // Don't stop on errors, we want to see all results
-      captureOutput: true,
-      onStepStart: (stepNumber, command, args) => {
-        // Stop previous spinner if exists
-        if (currentStepSpinner) {
-          currentStepSpinner.stop()
-        }
-        
-        // Format args for display
-        const argsDisplay = typeof args === 'string' 
-          ? args.substring(0, 50) + (args.length > 50 ? '...' : '')
-          : args.selector || args.url || JSON.stringify(args).substring(0, 50)
-        
-        currentStepSpinner = ora2(`Step ${stepNumber}: ${command} ${argsDisplay}`).start()
-      },
-      onStepComplete: (stepNumber, command, success) => {
-        if (currentStepSpinner) {
-          if (success) {
-            currentStepSpinner.succeed(`Step ${stepNumber}: ${command} ✓`)
-          } else {
-            currentStepSpinner.fail(`Step ${stepNumber}: ${command} ✗`)
+    try {
+      result = await executor.execute(workflow, {
+        strict: flags["early-bailout"] as boolean, // Use early bailout flag
+        captureOutput: true,
+        onStepStart: (stepNumber, command, args) => {
+          // Stop previous spinner if exists
+          if (currentStepSpinner) {
+            currentStepSpinner.stop()
           }
-          currentStepSpinner = null
+          
+          // Format args for display
+          const argsDisplay = typeof args === 'string' 
+            ? args.substring(0, 50) + (args.length > 50 ? '...' : '')
+            : args.selector || args.url || JSON.stringify(args).substring(0, 50)
+          
+          currentStepSpinner = ora2(`Step ${stepNumber}: ${command} ${argsDisplay}`).start()
+        },
+        onStepComplete: (stepNumber, command, success) => {
+          if (currentStepSpinner) {
+            if (success) {
+              currentStepSpinner.succeed(`Step ${stepNumber}: ${command} ✓`)
+            } else {
+              currentStepSpinner.fail(`Step ${stepNumber}: ${command} ✗`)
+            }
+            currentStepSpinner = null
+          }
+        }
+      })
+    } catch (error) {
+      // Clean up spinner on error
+      if (currentStepSpinner) {
+        currentStepSpinner.stop()
+      }
+      
+      // Extract step results from the executor even on failure
+      const partialResults = executor.getStepResults()
+      const failedStep = partialResults[partialResults.length - 1]
+      
+      // Create a result object for early bailout
+      result = {
+        success: false,
+        totalSteps: workflow.length,
+        successfulSteps: partialResults.filter(s => s.success).length,
+        failedSteps: partialResults.filter(s => !s.success).length,
+        steps: partialResults,
+        totalDuration: Date.now() - executionStartTime,
+        earlyBailout: true
+      } as WorkflowExecutionResult
+      
+      // Show early bailout message
+      if (flags["early-bailout"] && failedStep) {
+        this.log(`\n🛑 Execution stopped early due to failure at step ${failedStep.stepNumber}`)
+        this.log(`   Failed command: ${failedStep.command}`)
+        if (failedStep.error) {
+          this.log(`   Error: ${failedStep.error}`)
         }
       }
-    })
+    }
     
     // Clean up any remaining spinner
     if (currentStepSpinner) {
@@ -644,6 +693,10 @@ Consider using broader selectors first to test, then narrow down.`
     this.log(`   ✅ Successful: ${result.successfulSteps}`)
     this.log(`   ❌ Failed: ${result.failedSteps}`)
     this.log(`   ⏱️  Duration: ${result.totalDuration}ms`)
+    
+    if (result.earlyBailout) {
+      this.log(`   🛑 Early bailout: Yes`)
+    }
 
     if (result.failedSteps > 0) {
       this.log("\n❌ Failed steps:")
@@ -711,12 +764,10 @@ Consider using broader selectors first to test, then narrow down.`
       { name: '🚪 Exit without saving', value: 'quit' }
     )
 
-    const { action } = await inquirer.prompt([{
-      type: 'list',
-      name: 'action',
+    const action = await select({
       message: 'The workflow needs improvement. What would you like to do?',
-      choices
-    }])
+      choices: choices.map(c => ({ name: c.name, value: c.value }))
+    })
 
     // Handle suggestion selections
     if (action.startsWith('suggestion_')) {
@@ -746,12 +797,10 @@ Consider using broader selectors first to test, then narrow down.`
         break
 
       case 'modify': {
-        const { newInstruction } = await inquirer.prompt([{
-          type: 'input',
-          name: 'newInstruction',
+        const newInstruction = await input({
           message: 'Enter modified instruction:',
           default: originalInstruction
-        }])
+        })
 
         // Reset attempts for new instruction
         this.attempts = []
@@ -769,12 +818,10 @@ Consider using broader selectors first to test, then narrow down.`
           this.log(resultSummary)
         }
 
-        const { feedbackText } = await inquirer.prompt([{
-          type: 'input',
-          name: 'feedbackText',
+        const feedbackText = await input({
           message: 'What needs to be corrected or improved?',
-          validate: (input) => input.trim().length > 0 || 'Please provide your feedback'
-        }])
+          validate: (value) => value.trim().length > 0 || 'Please provide your feedback'
+        })
 
         // Create a structured refinement that includes the output
         const refinedInstruction = await this.createRefinedInstruction(
@@ -792,9 +839,7 @@ Consider using broader selectors first to test, then narrow down.`
       }
 
       case 'refine': {
-        const { refinementType } = await inquirer.prompt([{
-          type: 'list',
-          name: 'refinementType',
+        const refinementType = await select({
           message: 'What would you like to refine?',
           choices: [
             { name: 'Specify exact element text or attributes', value: 'element' },
@@ -802,17 +847,15 @@ Consider using broader selectors first to test, then narrow down.`
             { name: 'Specify data format', value: 'format' },
             { name: 'Add error handling', value: 'error' }
           ]
-        }])
+        })
 
         let refinedSelectorInstruction = originalInstruction
 
         switch (refinementType) {
           case 'element': {
-            const { elementDetails } = await inquirer.prompt([{
-              type: 'input',
-              name: 'elementDetails',
+            const elementDetails = await input({
               message: 'Describe the element more specifically (e.g., "the blue submit button", "link containing \'Login\'"):'
-            }])
+            })
             refinedSelectorInstruction = await this.createAIRefinedInstruction(
               originalInstruction,
               `Look for ${elementDetails}`,
@@ -822,11 +865,9 @@ Consider using broader selectors first to test, then narrow down.`
           }
 
           case 'wait': {
-            const { waitDetails } = await inquirer.prompt([{
-              type: 'input',
-              name: 'waitDetails',
+            const waitDetails = await input({
               message: 'What should we wait for? (e.g., "wait for loading spinner to disappear", "wait 2 seconds"):'
-            }])
+            })
             refinedSelectorInstruction = await this.createAIRefinedInstruction(
               originalInstruction,
               waitDetails,
@@ -836,11 +877,9 @@ Consider using broader selectors first to test, then narrow down.`
           }
 
           case 'format': {
-            const { formatDetails } = await inquirer.prompt([{
-              type: 'input',
-              name: 'formatDetails',
+            const formatDetails = await input({
               message: 'How should the data be formatted? (e.g., "as CSV", "only titles", "include links"):'
-            }])
+            })
             refinedSelectorInstruction = await this.createAIRefinedInstruction(
               originalInstruction,
               `Format the data ${formatDetails}`,
@@ -877,12 +916,10 @@ Consider using broader selectors first to test, then narrow down.`
 
   private async promptSaveWorkflow(instruction: string, yamlText: string, skipConfirmation = false): Promise<void> {
     if (!skipConfirmation) {
-      const { shouldSave } = await inquirer.prompt([{
-        type: 'confirm',
-        name: 'shouldSave',
+      const shouldSave = await confirm({
         message: 'Would you like to save this workflow?',
         default: true
-      }])
+      })
 
       if (!shouldSave) {
         this.log('✅ Workflow completed without saving.')
@@ -890,24 +927,18 @@ Consider using broader selectors first to test, then narrow down.`
       }
     }
 
-    const { name, description, tags } = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'name',
-        message: 'Workflow name:',
-        validate: (input) => input.length > 0 || 'Name is required'
-      },
-      {
-        type: 'input',
-        name: 'description',
-        message: 'Description (optional):'
-      },
-      {
-        type: 'input',
-        name: 'tags',
-        message: 'Tags (comma-separated, optional):'
-      }
-    ])
+    const name = await input({
+      message: 'Workflow name:',
+      validate: (value) => value.length > 0 || 'Name is required'
+    })
+
+    const description = await input({
+      message: 'Description (optional):'
+    })
+
+    const tags = await input({
+      message: 'Tags (comma-separated, optional):'
+    })
 
     const tagArray = tags ? tags.split(',').map((t: string) => t.trim()).filter(Boolean) : undefined
 
@@ -1062,9 +1093,7 @@ IMPORTANT for suggestions:
     yamlText: string,
     flags: Record<string, unknown>
   ): Promise<void> {
-    const { action } = await inquirer.prompt([{
-      type: 'list',
-      name: 'action',
+    const action = await select({
       message: 'The workflow succeeded! What would you like to do?',
       choices: [
         { name: '💾 Save workflow for future use', value: 'save' },
@@ -1074,7 +1103,7 @@ IMPORTANT for suggestions:
         { name: '🚀 Continue building workflow from here...', value: 'continue' },
         { name: '✅ Done', value: 'done' }
       ]
-    }])
+    })
 
     switch (action) {
       case 'save':
@@ -1087,12 +1116,10 @@ IMPORTANT for suggestions:
         break
 
       case 'modify': {
-        const { newInstruction } = await inquirer.prompt([{
-          type: 'input',
-          name: 'newInstruction',
+        const newInstruction = await input({
           message: 'Enter modified instruction:',
           default: instruction
-        }])
+        })
         this.attempts = []
         await this.attemptWorkflow(newInstruction, flags)
         break
@@ -1109,12 +1136,10 @@ IMPORTANT for suggestions:
           this.log(resultSummary)
         }
 
-        const { feedbackText } = await inquirer.prompt([{
-          type: 'input',
-          name: 'feedbackText',
+        const feedbackText = await input({
           message: 'What needs to be different about the results?',
-          validate: (input) => input.trim().length > 0 || 'Please provide your feedback'
-        }])
+          validate: (value) => value.trim().length > 0 || 'Please provide your feedback'
+        })
 
         // Create a structured refinement that includes the output
         const refinedWithFeedback = await this.createRefinedInstruction(
@@ -1139,12 +1164,10 @@ IMPORTANT for suggestions:
         const currentUrl = this.page.url()
         this.log(`📍 Current page: ${currentUrl}`)
 
-        const { continuationInstruction } = await inquirer.prompt([{
-          type: 'input',
-          name: 'continuationInstruction',
+        const continuationInstruction = await input({
           message: 'What would you like to do next from this page?',
-          validate: (input) => input.trim().length > 0 || 'Please describe what to do next'
-        }])
+          validate: (value) => value.trim().length > 0 || 'Please describe what to do next'
+        })
 
         // Continue with existing workflow as base
         await this.continueWorkflow(instruction, yamlText, continuationInstruction, flags)
@@ -1227,7 +1250,7 @@ ${this.buildSystemPrompt().split('AVAILABLE COMMANDS:')[1]}`
 
       this.log("\n🚀 Executing new steps...")
       const result = await executor.execute(newSteps, {
-        strict: false,
+        strict: flags["early-bailout"] as boolean,
         captureOutput: true
       })
 

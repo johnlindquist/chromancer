@@ -44,7 +44,9 @@
       "Bash(cat:*)",
       "Bash(mv:*)",
       "Bash(pnpm link:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(rg:*)",
+      "Bash(timeout:*)"
     ],
     "deny": []
   }

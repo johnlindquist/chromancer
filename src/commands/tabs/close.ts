@@ -114,17 +114,13 @@ export default class TabsClose extends BaseCommand {
       // Warn if closing all tabs
       if (tabsToClose.length === pages.length && !flags.force) {
         this.warn('This will close all tabs and may exit the browser')
-        const inquirer = await import('inquirer')
-        const { confirm } = await inquirer.default.prompt([
-          {
-            type: 'confirm',
-            name: 'confirm',
-            message: 'Are you sure you want to close all tabs?',
-            default: false,
-          },
-        ])
+        const { confirm } = await import('@inquirer/prompts')
+        const shouldClose = await confirm({
+          message: 'Are you sure you want to close all tabs?',
+          default: false
+        })
         
-        if (!confirm) {
+        if (!shouldClose) {
           this.log('Cancelled')
           return
         }

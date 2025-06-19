@@ -76,17 +76,12 @@ export default class TabsSwitch extends BaseCommand {
           }
         }))
 
-        const inquirer = await import('inquirer')
-        const { selectedIndex } = await inquirer.default.prompt([
-          {
-            type: 'list',
-            name: 'selectedIndex',
-            message: 'Select tab to switch to:',
-            choices: tabChoices,
-            default: currentIndex,
-            pageSize: 10,
-          },
-        ])
+        const { select } = await import('@inquirer/prompts')
+        const selectedIndex = await select({
+          message: 'Select tab to switch to:',
+          choices: tabChoices.map(c => ({ name: c.name, value: c.value })),
+          default: currentIndex
+        })
         
         targetIndex = selectedIndex
       } else if (!args.target) {

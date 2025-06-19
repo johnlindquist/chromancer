@@ -106,18 +106,13 @@ export default class TabsFocus extends BaseCommand {
           short: `[${tab.index}] ${tab.title}`,
         }))
 
-        const inquirer = await import('inquirer')
-        const { selected } = await inquirer.default.prompt([
-          {
-            type: 'list',
-            name: 'selected',
-            message: matchingTabs.length > 1 
+        const { select } = await import('@inquirer/prompts')
+        const selected = await select({
+          message: matchingTabs.length > 1 
               ? `Found ${matchingTabs.length} matching tabs. Select one:`
               : 'Select tab to focus:',
-            choices,
-            pageSize: 10,
-          },
-        ])
+          choices: choices.map(c => ({ name: c.name, value: c.value }))
+        })
         
         targetTab = selected
       } else if (matchingTabs.length === 1) {

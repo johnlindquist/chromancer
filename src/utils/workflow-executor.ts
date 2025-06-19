@@ -6,6 +6,8 @@ import { RunLogManager } from './run-log.js';
 import { DOMDigest } from './dom-digest.js';
 import { normalizeSelector, isValidSelector, formatSelectorForError, suggestSelectorFix } from './selector-normalizer.js';
 import { DOMInspector } from './dom-inspector.js';
+import * as readline from 'node:readline/promises';
+import { stdin, stdout } from 'node:process';
 
 interface WorkflowStep {
   [command: string]: any;
@@ -28,6 +30,10 @@ export class WorkflowExecutor {
   constructor(page: Page, originalPrompt?: string) {
     this.page = page;
     this.originalPrompt = originalPrompt;
+  }
+
+  getStepResults(): WorkflowStepResult[] {
+    return this.stepResults;
   }
 
   async execute(
@@ -252,6 +258,17 @@ export class WorkflowExecutor {
             timeout 
           });
           output = `Waited for selector: ${waitSelector}`;
+        } else if (args.message) {
+          // Interactive wait - wait for user input
+          const message = args.message || 'Press Enter to continue...';
+          const rl = readline.createInterface({ input: stdin, output: stdout });
+          
+          // Display the message and wait for user input
+          console.log(`\n⏸️  ${message}`);
+          await rl.question('');
+          rl.close();
+          
+          output = `User continued after: "${message}"`;
         } else if (args.selector) {
           const waitSelector = normalizeSelector(args.selector);
           if (!isValidSelector(waitSelector)) {

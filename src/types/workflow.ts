@@ -15,6 +15,7 @@ export interface WorkflowExecutionResult {
   failedSteps: number;
   steps: WorkflowStepResult[];
   totalDuration: number;
+  earlyBailout?: boolean;
 }
 
 export interface SavedWorkflow {

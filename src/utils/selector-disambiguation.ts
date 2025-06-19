@@ -146,27 +146,21 @@ export function formatElementMatches(elements: ElementMatch[]): string {
  */
 export async function getInteractiveSelection(elements: ElementMatch[]): Promise<string | null> {
   try {
-    const inquirer = await import('inquirer')
+    const { select } = await import('@inquirer/prompts')
     
     const choices = elements.map((el) => {
       const visibilityIcon = el.visible ? '✓' : '✗'
       const text = el.textContent ? ` - "${el.textContent}"` : ''
       return {
         name: `[${el.index}] <${el.tagName}> ${visibilityIcon} ${el.selector}${text}`,
-        value: el.selector,
-        short: el.selector,
+        value: el.selector
       }
     })
     
-    const { selectedSelector } = await inquirer.default.prompt([
-      {
-        type: 'list',
-        name: 'selectedSelector',
-        message: 'Multiple elements found. Select one:',
-        choices,
-        pageSize: 10,
-      },
-    ])
+    const selectedSelector = await select({
+      message: 'Multiple elements found. Select one:',
+      choices: choices.map(c => ({ name: c.name, value: c.value }))
+    })
     
     return selectedSelector
   } catch (error) {

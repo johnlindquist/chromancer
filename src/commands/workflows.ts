@@ -4,7 +4,7 @@ import { WorkflowStorage } from '../utils/workflow-storage.js'
 import { WorkflowExecutor } from '../utils/workflow-executor.js'
 import * as yaml from 'yaml'
 import * as fs from 'node:fs/promises'
-import inquirer from 'inquirer'
+import { input, confirm, select } from '@inquirer/prompts'
 import type { SavedWorkflow } from '../types/workflow.js'
 
 // Create a chalk-like interface for colorization
@@ -110,31 +110,40 @@ export default class Workflows extends BaseCommand {
         name: `${w.name} ${chalk.gray(`(${w.tags?.join(', ') || 'no tags'}) - ${w.executions || 0} runs`)}`,
         value: { action: 'run', workflow: w }
       })),
-      new inquirer.Separator(),
+      { name: '─────────────────', value: 'separator', disabled: true },
       { name: '📋 List all workflows', value: { action: 'list' } },
       { name: '📥 Import workflow', value: { action: 'import' } },
       { name: '🚪 Exit', value: { action: 'exit' } }
     ]
 
-    const { selection } = await inquirer.prompt([{
-      type: 'list',
-      name: 'selection',
+    const selection = await select({
       message: 'Select a workflow to run or an action:',
-      choices
-    }])
+      choices: choices.map(c => ({ name: c.name, value: c.value }))
+    })
 
-    switch (selection.action) {
-      case 'run':
-        await this.runWorkflow(selection.workflow.id, flags)
-        break
-      case 'list':
-        await this.listWorkflows(flags)
-        break
-      case 'import':
-        await this.importWorkflow(flags)
-        break
-      case 'exit':
-        break
+    // Handle separator selection
+    if (typeof selection === 'string' && selection === 'separator') {
+      // Re-run the menu if separator was selected
+      return this.showInteractiveMenu(flags)
+    }
+
+    // TypeScript type guard
+    if (typeof selection === 'object' && 'action' in selection) {
+      switch (selection.action) {
+        case 'run':
+          if ('workflow' in selection) {
+            await this.runWorkflow(selection.workflow.id, flags)
+          }
+          break
+        case 'list':
+          await this.listWorkflows(flags)
+          break
+        case 'import':
+          await this.importWorkflow(flags)
+          break
+        case 'exit':
+          break
+      }
     }
   }
 
@@ -268,14 +277,12 @@ export default class Workflows extends BaseCommand {
     try {
       const workflow = await this.storage.load(nameOrId)
       
-      const { confirm } = await inquirer.prompt([{
-        type: 'confirm',
-        name: 'confirm',
+      const shouldDelete = await confirm({
         message: `Are you sure you want to delete "${workflow.name}"?`,
         default: false
-      }])
+      })
 
-      if (!confirm) {
+      if (!shouldDelete) {
         this.log('Deletion cancelled.')
         return
       }
@@ -317,30 +324,23 @@ export default class Workflows extends BaseCommand {
       }
 
       // Prompt for workflow details
-      const { name, description, tags, prompt } = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'name',
-          message: 'Workflow name:',
-          validate: (input) => input.length > 0 || 'Name is required'
-        },
-        {
-          type: 'input',
-          name: 'prompt',
-          message: 'Original instruction/prompt:',
-          default: 'Imported workflow'
-        },
-        {
-          type: 'input',
-          name: 'description',
-          message: 'Description (optional):'
-        },
-        {
-          type: 'input',
-          name: 'tags',
-          message: 'Tags (comma-separated, optional):'
-        }
-      ])
+      const name = await input({
+        message: 'Workflow name:',
+        validate: (value) => value.length > 0 || 'Name is required'
+      })
+
+      const prompt = await input({
+        message: 'Original instruction/prompt:',
+        default: 'Imported workflow'
+      })
+
+      const description = await input({
+        message: 'Description (optional):'
+      })
+
+      const tags = await input({
+        message: 'Tags (comma-separated, optional):'
+      })
 
       const tagArray = tags ? tags.split(',').map((t: string) => t.trim()).filter(Boolean) : undefined
       
@@ -356,19 +356,17 @@ export default class Workflows extends BaseCommand {
   }
 
   private async promptForFile(): Promise<string> {
-    const { file } = await inquirer.prompt([{
-      type: 'input',
-      name: 'file',
+    const file = await input({
       message: 'Path to YAML workflow file:',
-      validate: async (input) => {
+      validate: async (value) => {
         try {
-          await fs.access(input)
+          await fs.access(value)
           return true
         } catch {
           return 'File not found'
         }
       }
-    }])
+    })
     
     return file
   }
