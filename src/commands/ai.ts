@@ -7,7 +7,7 @@ import { DOMInspector } from "../utils/dom-inspector.js"
 import { RunLogManager } from "../utils/run-log.js"
 import { DOMDigestCollector } from "../utils/dom-digest.js"
 import * as yaml from "yaml"
-import { input, confirm, select } from "@inquirer/prompts"
+import { input, confirm, select, Separator } from "@inquirer/prompts"
 import type { WorkflowExecutionResult } from "../types/workflow.js"
 
 interface WorkflowAttempt {
@@ -810,17 +810,20 @@ Consider using broader selectors first to test, then narrow down.`
     }
 
     // Build menu choices with suggestions as first options
-    const choices = []
+    const choices: any[] = []
 
     // Add suggestion-based choices first
     if (verification?.suggestions?.length) {
       for (const [index, suggestion] of verification.suggestions.slice(0, 3).entries()) {
+        const isFavorite = verification.favoriteSuggestion === index
+        const prefix = isFavorite ? '⭐' : '💡'
         choices.push({
-          name: `💡 ${index + 1}. ${suggestion}`,
+          name: `${prefix} ${index + 1}. ${suggestion}`,
           value: `suggestion_${index}`
         })
       }
-      choices.push({ name: '─────────────────', value: 'separator', disabled: true })
+      // Add separator
+      choices.push(new Separator('─────────────────'))
     }
 
     // Add standard choices
@@ -834,9 +837,9 @@ Consider using broader selectors first to test, then narrow down.`
     )
 
     await this.stabilizeTerminal()
-    const action = await select({
+    const action = await select<string>({
       message: 'The workflow needs improvement. What would you like to do?',
-      choices: choices.map(c => ({ name: c.name, value: c.value }))
+      choices
     })
 
     // Handle suggestion selections
@@ -912,7 +915,7 @@ Consider using broader selectors first to test, then narrow down.`
 
       case 'refine': {
         await this.stabilizeTerminal()
-        const refinementType = await select({
+        const refinementType = await select<string>({
           message: 'What would you like to refine?',
           choices: [
             { name: 'Specify exact element text or attributes', value: 'element' },
@@ -1180,7 +1183,7 @@ IMPORTANT for suggestions:
     flags: Record<string, unknown>
   ): Promise<void> {
     await this.stabilizeTerminal()
-    const action = await select({
+    const action = await select<string>({
       message: 'The workflow succeeded! What would you like to do?',
       choices: [
         { name: '💾 Save workflow for future use', value: 'save' },
