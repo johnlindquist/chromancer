@@ -21,6 +21,22 @@ const chalk = {
 export default class Workflows extends BaseCommand {
   static description = 'Manage saved Chromancer workflows'
 
+  private async stabilizeTerminal(): Promise<void> {
+    // Ensure cursor is visible
+    process.stdout.write('\x1b[?25h')
+    
+    // Clear any residual line content
+    process.stdout.write('\r\x1b[K')
+    
+    // Small delay to let terminal stabilize
+    await new Promise(resolve => setTimeout(resolve, 50))
+    
+    // Ensure stdout is flushed
+    if (process.stdout.write('')) {
+      await new Promise(resolve => process.stdout.once('drain', resolve))
+    }
+  }
+
   static examples = [
     '<%= config.bin %> <%= command.id %> list',
     '<%= config.bin %> <%= command.id %> run "login flow"',
@@ -116,6 +132,7 @@ export default class Workflows extends BaseCommand {
       { name: '🚪 Exit', value: { action: 'exit' } }
     ]
 
+    await this.stabilizeTerminal()
     const selection = await select({
       message: 'Select a workflow to run or an action:',
       choices: choices.map(c => ({ name: c.name, value: c.value }))
@@ -277,6 +294,7 @@ export default class Workflows extends BaseCommand {
     try {
       const workflow = await this.storage.load(nameOrId)
       
+      await this.stabilizeTerminal()
       const shouldDelete = await confirm({
         message: `Are you sure you want to delete "${workflow.name}"?`,
         default: false
@@ -324,20 +342,24 @@ export default class Workflows extends BaseCommand {
       }
 
       // Prompt for workflow details
+      await this.stabilizeTerminal()
       const name = await input({
         message: 'Workflow name:',
         validate: (value) => value.length > 0 || 'Name is required'
       })
 
+      await this.stabilizeTerminal()
       const prompt = await input({
         message: 'Original instruction/prompt:',
         default: 'Imported workflow'
       })
 
+      await this.stabilizeTerminal()
       const description = await input({
         message: 'Description (optional):'
       })
 
+      await this.stabilizeTerminal()
       const tags = await input({
         message: 'Tags (comma-separated, optional):'
       })
@@ -356,6 +378,7 @@ export default class Workflows extends BaseCommand {
   }
 
   private async promptForFile(): Promise<string> {
+    await this.stabilizeTerminal()
     const file = await input({
       message: 'Path to YAML workflow file:',
       validate: async (value) => {

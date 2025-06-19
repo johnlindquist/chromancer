@@ -24,6 +24,8 @@ interface VerificationResult {
   analysis: string
   reason: string
   suggestions?: string[]
+  favoriteSuggestion?: number
+  favoriteReasoning?: string
 }
 
 export default class AI extends BaseCommand {
@@ -60,6 +62,10 @@ export default class AI extends BaseCommand {
       default: true,
       allowNo: true,
     }),
+    auto: Flags.boolean({
+      description: "Automatically apply AI's favorite suggestion and retry until success",
+      default: false,
+    }),
   }
 
   static args = {
@@ -75,6 +81,22 @@ export default class AI extends BaseCommand {
   constructor(argv: string[], config: Config) {
     super(argv, config)
     this.runLogManager = new RunLogManager()
+  }
+
+  private async stabilizeTerminal(): Promise<void> {
+    // Ensure cursor is visible
+    process.stdout.write('\x1b[?25h')
+    
+    // Clear any residual line content
+    process.stdout.write('\r\x1b[K')
+    
+    // Small delay to let terminal stabilize
+    await new Promise(resolve => setTimeout(resolve, 50))
+    
+    // Ensure stdout is flushed
+    if (process.stdout.write('')) {
+      await new Promise(resolve => process.stdout.once('drain', resolve))
+    }
   }
 
   async run(): Promise<void> {
@@ -305,7 +327,15 @@ ${instruction}
         // Handle next steps based on verification
         if (verification.success) {
           this.log(`\n✅ ${verification.reason}`)
-          await this.handleSuccessfulWorkflow(instruction, yamlText, flags)
+          
+          // In auto mode, just save and exit on success
+          if (flags.auto) {
+            this.log('\n🎉 Auto mode: Workflow succeeded!')
+            await this.promptSaveWorkflow(instruction, yamlText, false)
+            process.exit(0)
+          } else {
+            await this.handleSuccessfulWorkflow(instruction, yamlText, flags)
+          }
         } else {
           this.log(`\n⚠️  ${verification.reason}`)
           await this.handleFeedbackLoop(instruction, attempt, flags, verification)
@@ -735,9 +765,48 @@ Consider using broader selectors first to test, then narrow down.`
       if (verification.suggestions && verification.suggestions.length > 0) {
         this.log("\n💡 Suggestions for improvement:")
         for (const [index, suggestion] of verification.suggestions.entries()) {
-          this.log(`   ${index + 1}. ${suggestion}`)
+          const isFavorite = verification.favoriteSuggestion === index
+          const prefix = isFavorite ? '⭐' : '  '
+          this.log(`   ${prefix} ${index + 1}. ${suggestion}`)
+        }
+        
+        // Show AI's reasoning for its favorite
+        if (verification.favoriteReasoning && verification.favoriteSuggestion !== undefined) {
+          this.log(`\n🤖 AI recommends option ${verification.favoriteSuggestion + 1}:`)
+          this.log(`   ${verification.favoriteReasoning}`)
         }
       }
+    }
+
+    // Auto mode: automatically select AI's favorite suggestion
+    if (flags.auto && verification?.favoriteSuggestion !== undefined && verification?.suggestions?.length) {
+      // Prevent infinite loops - max 10 attempts
+      if (this.attempts.length >= 10) {
+        this.log(`\n❌ Auto mode: Maximum attempts (10) reached without success.`)
+        this.log(`   Consider running without --auto flag for manual control.`)
+        process.exit(1)
+      }
+      
+      const favoriteIndex = verification.favoriteSuggestion
+      const favoriteSuggestion = verification.suggestions[favoriteIndex]
+      
+      this.log(`\n🤖 Auto mode: Attempt ${this.attempts.length + 1}/10 - Applying AI's favorite suggestion...`)
+      this.log(`   Selected: "${favoriteSuggestion}"`)
+      
+      const refinedInstruction = await this.createAIRefinedInstruction(
+        originalInstruction,
+        favoriteSuggestion,
+        { lastResult: lastAttempt.result }
+      )
+      
+      this.log(`🎯 Refined instruction: "${refinedInstruction}"`)
+      
+      // Add small delay for readability
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // Continue with refined instruction
+      await this.attemptWorkflow(refinedInstruction, flags, this.attempts)
+      return
     }
 
     // Build menu choices with suggestions as first options
@@ -764,6 +833,7 @@ Consider using broader selectors first to test, then narrow down.`
       { name: '🚪 Exit without saving', value: 'quit' }
     )
 
+    await this.stabilizeTerminal()
     const action = await select({
       message: 'The workflow needs improvement. What would you like to do?',
       choices: choices.map(c => ({ name: c.name, value: c.value }))
@@ -797,6 +867,7 @@ Consider using broader selectors first to test, then narrow down.`
         break
 
       case 'modify': {
+        await this.stabilizeTerminal()
         const newInstruction = await input({
           message: 'Enter modified instruction:',
           default: originalInstruction
@@ -818,6 +889,7 @@ Consider using broader selectors first to test, then narrow down.`
           this.log(resultSummary)
         }
 
+        await this.stabilizeTerminal()
         const feedbackText = await input({
           message: 'What needs to be corrected or improved?',
           validate: (value) => value.trim().length > 0 || 'Please provide your feedback'
@@ -839,6 +911,7 @@ Consider using broader selectors first to test, then narrow down.`
       }
 
       case 'refine': {
+        await this.stabilizeTerminal()
         const refinementType = await select({
           message: 'What would you like to refine?',
           choices: [
@@ -853,6 +926,7 @@ Consider using broader selectors first to test, then narrow down.`
 
         switch (refinementType) {
           case 'element': {
+            await this.stabilizeTerminal()
             const elementDetails = await input({
               message: 'Describe the element more specifically (e.g., "the blue submit button", "link containing \'Login\'"):'
             })
@@ -865,6 +939,7 @@ Consider using broader selectors first to test, then narrow down.`
           }
 
           case 'wait': {
+            await this.stabilizeTerminal()
             const waitDetails = await input({
               message: 'What should we wait for? (e.g., "wait for loading spinner to disappear", "wait 2 seconds"):'
             })
@@ -877,6 +952,7 @@ Consider using broader selectors first to test, then narrow down.`
           }
 
           case 'format': {
+            await this.stabilizeTerminal()
             const formatDetails = await input({
               message: 'How should the data be formatted? (e.g., "as CSV", "only titles", "include links"):'
             })
@@ -916,6 +992,7 @@ Consider using broader selectors first to test, then narrow down.`
 
   private async promptSaveWorkflow(instruction: string, yamlText: string, skipConfirmation = false): Promise<void> {
     if (!skipConfirmation) {
+      await this.stabilizeTerminal()
       const shouldSave = await confirm({
         message: 'Would you like to save this workflow?',
         default: true
@@ -927,15 +1004,18 @@ Consider using broader selectors first to test, then narrow down.`
       }
     }
 
+    await this.stabilizeTerminal()
     const name = await input({
       message: 'Workflow name:',
       validate: (value) => value.length > 0 || 'Name is required'
     })
 
+    await this.stabilizeTerminal()
     const description = await input({
       message: 'Description (optional):'
     })
 
+    await this.stabilizeTerminal()
     const tags = await input({
       message: 'Tags (comma-separated, optional):'
     })
@@ -1042,19 +1122,23 @@ Please provide:
 2. Whether it was successful (true/false)
 3. A reason why it succeeded or failed
 4. If failed, EXACTLY 3 specific, actionable suggestions that can be directly appended to the original instruction
+5. If failed, which suggestion (0, 1, or 2) is your favorite and why
 
 Format your response as JSON:
 {
   "success": boolean,
   "analysis": "Your 2-3 sentence analysis",
   "reason": "Brief reason for success/failure",
-  "suggestions": ["actionable suggestion 1", "actionable suggestion 2", "actionable suggestion 3"] // REQUIRED if failed, must be 3 items
+  "suggestions": ["actionable suggestion 1", "actionable suggestion 2", "actionable suggestion 3"], // REQUIRED if failed, must be 3 items
+  "favoriteSuggestion": 0, // 0-based index of your favorite suggestion (0, 1, or 2)
+  "favoriteReasoning": "2-3 sentences explaining why this is the best approach"
 }
 
 IMPORTANT for suggestions:
 - Each suggestion must be a complete instruction that can be appended to the original command
 - Make them specific and actionable (e.g., "Press Enter key after typing instead of clicking button")
 - Do NOT use vague language like "try different selector" - be specific about what to try
+- Your favorite should be the one most likely to succeed based on the error patterns
 `
 
     try {
@@ -1068,7 +1152,9 @@ IMPORTANT for suggestions:
           success: parsed.success ?? false,
           analysis: parsed.analysis || "Unable to analyze results",
           reason: parsed.reason || "No reason provided",
-          suggestions: parsed.suggestions
+          suggestions: parsed.suggestions,
+          favoriteSuggestion: parsed.favoriteSuggestion,
+          favoriteReasoning: parsed.favoriteReasoning
         }
       }
 
@@ -1093,6 +1179,7 @@ IMPORTANT for suggestions:
     yamlText: string,
     flags: Record<string, unknown>
   ): Promise<void> {
+    await this.stabilizeTerminal()
     const action = await select({
       message: 'The workflow succeeded! What would you like to do?',
       choices: [
@@ -1116,6 +1203,7 @@ IMPORTANT for suggestions:
         break
 
       case 'modify': {
+        await this.stabilizeTerminal()
         const newInstruction = await input({
           message: 'Enter modified instruction:',
           default: instruction
@@ -1136,6 +1224,7 @@ IMPORTANT for suggestions:
           this.log(resultSummary)
         }
 
+        await this.stabilizeTerminal()
         const feedbackText = await input({
           message: 'What needs to be different about the results?',
           validate: (value) => value.trim().length > 0 || 'Please provide your feedback'
@@ -1164,6 +1253,7 @@ IMPORTANT for suggestions:
         const currentUrl = this.page.url()
         this.log(`📍 Current page: ${currentUrl}`)
 
+        await this.stabilizeTerminal()
         const continuationInstruction = await input({
           message: 'What would you like to do next from this page?',
           validate: (value) => value.trim().length > 0 || 'Please describe what to do next'
