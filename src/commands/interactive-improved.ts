@@ -5,13 +5,6 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 
-// Extend readline.Interface to include the history property
-declare module 'readline' {
-  interface Interface {
-    history: string[]
-  }
-}
-
 export default class Interactive extends BaseCommand {
   static description = 'Launch an interactive REPL with command history, tab completion, and real-time browser control - explore pages interactively with full CDP access'
 
@@ -27,7 +20,6 @@ export default class Interactive extends BaseCommand {
 
   private rl?: readline.Interface
   private historyFile: string
-  // History is now managed by readline itself
   private commands = {
     navigate: 'Navigate to a URL',
     click: 'Click on an element',
@@ -74,7 +66,7 @@ export default class Interactive extends BaseCommand {
       this.error('No page available')
     }
 
-    // Setup readline interface with built-in history support
+    // Setup readline interface with history support
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -85,7 +77,7 @@ export default class Interactive extends BaseCommand {
       removeHistoryDuplicates: true, // Automatically remove duplicate entries
     })
 
-    // Load history from file after readline is created
+    // Load history from file
     this.loadHistory()
 
     this.log('✨ Interactive CDP session started')
@@ -122,7 +114,6 @@ export default class Interactive extends BaseCommand {
       process.exit(0)
     })
   }
-
 
   private completer(line: string): [string[], string] {
     const completions = Object.keys(this.commands)
@@ -442,42 +433,42 @@ export default class Interactive extends BaseCommand {
     }
   }
 
+
   private loadHistory(): void {
+    if (!this.rl) return
+    
     try {
-      if (fs.existsSync(this.historyFile) && this.rl) {
+      if (fs.existsSync(this.historyFile)) {
         const data = fs.readFileSync(this.historyFile, 'utf-8')
-        const historyLines = data.split('\n').filter(line => line.trim())
+        const commands = data.split('\n').filter(line => line.trim())
         
-        // Add each line to readline's history
-        // Note: We add in reverse order because readline adds new items to the beginning
-        for (let i = historyLines.length - 1; i >= 0; i--) {
-          this.rl.history.push(historyLines[i])
+        // Load history into readline
+        // Note: readline.history is stored in reverse order (newest first)
+        for (let i = commands.length - 1; i >= 0; i--) {
+          this.rl.history.push(commands[i])
         }
       }
     } catch (error) {
       // Ignore history load errors
+      this.logVerbose('Failed to load history:', error)
     }
   }
 
   private saveHistory(): void {
+    if (!this.rl) return
+    
     try {
-      if (this.rl && this.rl.history) {
-        // Get history from readline (it's stored in reverse order)
-        const history = this.rl.history.slice().reverse()
-        // Keep last 1000 commands
-        const historyData = history.slice(-1000).join('\n')
-        fs.writeFileSync(this.historyFile, historyData)
-      }
+      // Get history from readline (it's in reverse order)
+      const history = [...this.rl.history].reverse()
+      
+      // Keep only the last 1000 commands
+      const toSave = history.slice(-1000)
+      
+      fs.writeFileSync(this.historyFile, toSave.join('\n'))
     } catch (error) {
       // Ignore history save errors
+      this.logVerbose('Failed to save history:', error)
     }
-  }
-
-  private addToHistory(command: string): void {
-    // This method is no longer needed as readline automatically manages history
-    // when a line is processed. The history is added by readline itself
-    // and duplicates are handled by the removeHistoryDuplicates option.
-    // Keeping this method for backward compatibility but it does nothing.
   }
 
   async finally(): Promise<void> {

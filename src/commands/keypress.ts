@@ -66,8 +66,10 @@ export default class Keypress extends BaseCommand {
 
       // Press key(s)
       for (let i = 0; i < flags.repeat; i++) {
-        if (i > 0 && flags.delay > 0) {
-          await this.page!.waitForTimeout(flags.delay)
+        if (i > 0) {
+          // Default to small delay if not specified to prevent sync issues
+          const keyDelay = flags.delay || 50
+          await this.page!.waitForTimeout(keyDelay)
         }
         
         this.log(`⌨️  Pressing: ${args.key}${flags.repeat > 1 ? ` (${i + 1}/${flags.repeat})` : ''}`)

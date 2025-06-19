@@ -223,8 +223,16 @@ export class WorkflowExecutor {
           ? args.split(' ').slice(1).join(' ')
           : args.text;
         
+        // Clear existing text if requested
+        if (args.clear || args.clearFirst) {
+          await this.page.click(typeSelector, { clickCount: 3 });
+          await this.page.waitForTimeout(50);
+          await this.page.keyboard.press('Delete');
+          await this.page.waitForTimeout(50);
+        }
+        
         await this.page.type(typeSelector, text, {
-          delay: args.delay || 0,
+          delay: args.delay || 10, // Default delay to prevent sync issues
         });
         
         if (args.submit || args.enter) {

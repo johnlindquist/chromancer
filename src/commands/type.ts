@@ -121,7 +121,11 @@ export default class Type extends BaseCommand {
         this.log(`🧹 Clearing existing text in: ${finalSelector}`)
         // Playwright's fill method clears by default, but for type we need to manually clear
         await this.page!.click(finalSelector, { clickCount: 3 })
+        // Add small delay to ensure selection is complete
+        await this.page!.waitForTimeout(50)
         await this.page!.keyboard.press('Delete')
+        // Add small delay to ensure deletion is complete
+        await this.page!.waitForTimeout(50)
       }
 
       // Process text to handle escape sequences
@@ -135,8 +139,10 @@ export default class Type extends BaseCommand {
       })
 
       // Use type method for more natural typing with delay
+      // Default to a small delay to prevent sync issues
+      const typeDelay = flags.delay || 10
       await this.page!.type(finalSelector, processedText, {
-        delay: flags.delay,
+        delay: typeDelay,
       })
 
       // Press additional keys if requested

@@ -77,6 +77,9 @@ export default class AI extends BaseCommand {
 
     // Initial attempt
     await this.attemptWorkflow(args.instruction, flags)
+    
+    // Ensure process exits cleanly after workflow completion
+    process.exit(0)
   }
 
   private async attemptWorkflow(instruction: string, flags: Record<string, unknown>, previousAttempts?: WorkflowAttempt[]): Promise<void> {
@@ -862,26 +865,29 @@ Consider using broader selectors first to test, then narrow down.`
       }
 
       case 'save':
-        await this.promptSaveWorkflow(originalInstruction, lastAttempt.yaml)
+        await this.promptSaveWorkflow(originalInstruction, lastAttempt.yaml, true) // Skip confirmation since user chose "Save anyway"
         break
 
       case 'quit':
         this.log('👋 Exiting without saving.')
+        process.exit(0)
         break
     }
   }
 
-  private async promptSaveWorkflow(instruction: string, yamlText: string): Promise<void> {
-    const { shouldSave } = await inquirer.prompt([{
-      type: 'confirm',
-      name: 'shouldSave',
-      message: 'Would you like to save this workflow?',
-      default: true
-    }])
+  private async promptSaveWorkflow(instruction: string, yamlText: string, skipConfirmation = false): Promise<void> {
+    if (!skipConfirmation) {
+      const { shouldSave } = await inquirer.prompt([{
+        type: 'confirm',
+        name: 'shouldSave',
+        message: 'Would you like to save this workflow?',
+        default: true
+      }])
 
-    if (!shouldSave) {
-      this.log('✅ Workflow completed without saving.')
-      return
+      if (!shouldSave) {
+        this.log('✅ Workflow completed without saving.')
+        return
+      }
     }
 
     const { name, description, tags } = await inquirer.prompt([
@@ -910,6 +916,9 @@ Consider using broader selectors first to test, then narrow down.`
       this.log(`\n✅ Workflow saved: ${saved.name} (${saved.id})`)
       this.log(`📁 Location: ~/.chromancer/workflows/${saved.id}.json`)
       this.log(`\n💡 Run it later with: chromancer workflows run "${name}"`)
+      
+      // Exit after successful save
+      process.exit(0)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       this.error(`Failed to save workflow: ${errorMessage}`)
@@ -1069,7 +1078,7 @@ IMPORTANT for suggestions:
 
     switch (action) {
       case 'save':
-        await this.promptSaveWorkflow(instruction, yamlText)
+        await this.promptSaveWorkflow(instruction, yamlText, true) // Skip confirmation since user already chose to save
         break
 
       case 'run':
@@ -1144,6 +1153,7 @@ IMPORTANT for suggestions:
 
       case 'done':
         this.log('✅ Great! Workflow completed successfully.')
+        process.exit(0)
         break
     }
   }
