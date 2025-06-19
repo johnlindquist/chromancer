@@ -373,6 +373,135 @@ export class WorkflowExecutor {
         output = `Hovered over ${hoverSelector}`;
         break;
 
+      case 'fill':
+        const rawFillSelector = typeof args === 'string' 
+          ? args.split(' ')[0]
+          : args.selector;
+        const fillSelector = normalizeSelector(rawFillSelector);
+        
+        if (!isValidSelector(fillSelector)) {
+          throw new Error(`Invalid selector: ${formatSelectorForError(fillSelector)}`);
+        }
+        
+        const fillValue = typeof args === 'string'
+          ? args.split(' ').slice(1).join(' ')
+          : args.value || args.text || '';
+        
+        // Clear and fill the field
+        await this.page.fill(fillSelector, fillValue);
+        output = `Filled "${fillValue}" into ${fillSelector}`;
+        break;
+
+      case 'keypress':
+      case 'press':
+        const key = typeof args === 'string' ? args : args.key;
+        
+        if (args.selector) {
+          const keypressSelector = normalizeSelector(args.selector);
+          if (!isValidSelector(keypressSelector)) {
+            throw new Error(`Invalid selector: ${formatSelectorForError(keypressSelector)}`);
+          }
+          await this.page.press(keypressSelector, key);
+          output = `Pressed "${key}" on ${keypressSelector}`;
+        } else {
+          // Global keypress
+          await this.page.keyboard.press(key);
+          output = `Pressed "${key}" key`;
+        }
+        break;
+
+      case 'assert':
+        // Handle different assert formats
+        if (typeof args === 'string') {
+          // Simple format: "selector"
+          const assertSelector = normalizeSelector(args);
+          if (!isValidSelector(assertSelector)) {
+            throw new Error(`Invalid selector: ${formatSelectorForError(assertSelector)}`);
+          }
+          
+          // Check if element exists
+          const exists = await this.page.locator(assertSelector).count() > 0;
+          if (!exists) {
+            throw new Error(`Element not found: ${assertSelector}`);
+          }
+          output = `Assertion passed: Element exists - ${assertSelector}`;
+        } else {
+          // Complex format with options
+          const assertSelector = args.selector ? normalizeSelector(args.selector) : null;
+          
+          if (assertSelector) {
+            // Selector-based assertions
+            if (!isValidSelector(assertSelector)) {
+              throw new Error(`Invalid selector: ${formatSelectorForError(assertSelector)}`);
+            }
+            
+            const element = this.page.locator(assertSelector).first();
+            const count = await this.page.locator(assertSelector).count();
+            
+            if (count === 0 && !args.notVisible) {
+              throw new Error(`Element not found: ${assertSelector}`);
+            }
+            
+            // Handle different assertion types
+            if (args.text || args.contains) {
+              const expectedText = args.text || args.contains;
+              const actualText = await element.textContent() || '';
+              if (!actualText.includes(expectedText)) {
+                throw new Error(`Element text "${actualText}" does not contain "${expectedText}"`);
+              }
+              output = `Assertion passed: Element contains text "${expectedText}"`;
+            } else if (args.value) {
+              const actualValue = await element.inputValue() || '';
+              if (actualValue !== args.value) {
+                throw new Error(`Input value "${actualValue}" does not equal "${args.value}"`);
+              }
+              output = `Assertion passed: Input value equals "${args.value}"`;
+            } else if (args.visible === true) {
+              const isVisible = count > 0 && await element.isVisible();
+              if (!isVisible) {
+                throw new Error(`Element is not visible: ${assertSelector}`);
+              }
+              output = `Assertion passed: Element is visible`;
+            } else if (args.visible === false || args.notVisible) {
+              const isVisible = count > 0 && await element.isVisible();
+              if (isVisible) {
+                throw new Error(`Element is visible but should not be: ${assertSelector}`);
+              }
+              output = `Assertion passed: Element is not visible`;
+            } else if (args.count !== undefined) {
+              const expectedCount = parseInt(args.count);
+              if (count !== expectedCount) {
+                throw new Error(`Expected ${expectedCount} elements, found ${count}`);
+              }
+              output = `Assertion passed: Found ${expectedCount} elements`;
+            } else {
+              // Default: just check existence
+              output = `Assertion passed: Element exists - ${assertSelector}`;
+            }
+          } else if (args.script || args.eval) {
+            // JavaScript expression assertion
+            const script = args.script || args.eval;
+            const result = await this.page.evaluate(script);
+            
+            if (args.equals !== undefined) {
+              const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
+              const expectedStr = typeof args.equals === 'string' ? args.equals : JSON.stringify(args.equals);
+              
+              if (resultStr !== expectedStr && result !== args.equals) {
+                throw new Error(`Expression result "${resultStr}" does not equal "${expectedStr}"`);
+              }
+              output = `Assertion passed: Expression equals "${expectedStr}"`;
+            } else if (result === false || result === null || result === undefined) {
+              throw new Error(`Expression evaluated to ${result}`);
+            } else {
+              output = `Assertion passed: Expression is truthy (${result})`;
+            }
+          } else {
+            throw new Error('Assert requires either selector or eval/script');
+          }
+        }
+        break;
+
       default:
         throw new Error(`Unknown command: ${command}`);
     }

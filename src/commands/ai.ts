@@ -284,10 +284,14 @@ ${instruction}
 
       // If interactive mode, always verify results with Claude
       if (flags.interactive) {
+        const ora5 = (await import('ora')).default
+        const verifySpinner = ora5('🔍 Verifying results with AI...').start()
+        
         const verification = await this.verifyResults(instruction, attempt, result)
+        
+        verifySpinner.succeed('🔍 AI Verification complete')
 
         // Show verification to user
-        this.log("\n🔍 AI Verification:")
         this.log(verification.analysis)
 
         // Handle next steps based on verification
@@ -716,12 +720,19 @@ Consider using broader selectors first to test, then narrow down.`
       const suggestionIndex = Number.parseInt(action.split('_')[1])
       const suggestion = verification?.suggestions?.[suggestionIndex] ?? ''
 
-      const appendedInstruction = `${originalInstruction}. ${suggestion}`
       this.log(`\n📝 Applying suggestion: "${suggestion}"`)
-      this.log(`Updated instruction: "${appendedInstruction}"`)
+      
+      // Use AI to intelligently merge the suggestion
+      const refinedInstruction = await this.createAIRefinedInstruction(
+        originalInstruction,
+        suggestion,
+        { lastResult: lastAttempt.result }
+      )
+      
+      this.log(`🎯 Refined instruction: "${refinedInstruction}"`)
 
       // Keep previous attempts for context
-      await this.attemptWorkflow(appendedInstruction, flags, this.attempts)
+      await this.attemptWorkflow(refinedInstruction, flags, this.attempts)
       return
     }
 
@@ -763,13 +774,14 @@ Consider using broader selectors first to test, then narrow down.`
         }])
 
         // Create a structured refinement that includes the output
-        const refinedInstruction = this.createRefinedInstruction(
+        const refinedInstruction = await this.createRefinedInstruction(
           originalInstruction,
           lastAttempt.result,
           feedbackText
         )
 
-        this.log('\n📝 Refining with your feedback...')
+        this.log('\n🎯 Refined instruction:')
+        this.log(refinedInstruction)
 
         // Keep previous attempts for context
         await this.attemptWorkflow(refinedInstruction, flags, this.attempts)
@@ -798,7 +810,11 @@ Consider using broader selectors first to test, then narrow down.`
               name: 'elementDetails',
               message: 'Describe the element more specifically (e.g., "the blue submit button", "link containing \'Login\'"):'
             }])
-            refinedSelectorInstruction = `${originalInstruction}. Look for ${elementDetails}`
+            refinedSelectorInstruction = await this.createAIRefinedInstruction(
+              originalInstruction,
+              `Look for ${elementDetails}`,
+              { verificationType: 'element-specification' }
+            )
             break
           }
 
@@ -808,7 +824,11 @@ Consider using broader selectors first to test, then narrow down.`
               name: 'waitDetails',
               message: 'What should we wait for? (e.g., "wait for loading spinner to disappear", "wait 2 seconds"):'
             }])
-            refinedSelectorInstruction = `${originalInstruction}. ${waitDetails}`
+            refinedSelectorInstruction = await this.createAIRefinedInstruction(
+              originalInstruction,
+              waitDetails,
+              { verificationType: 'wait-condition' }
+            )
             break
           }
 
@@ -818,16 +838,25 @@ Consider using broader selectors first to test, then narrow down.`
               name: 'formatDetails',
               message: 'How should the data be formatted? (e.g., "as CSV", "only titles", "include links"):'
             }])
-            refinedSelectorInstruction = `${originalInstruction} and format ${formatDetails}`
+            refinedSelectorInstruction = await this.createAIRefinedInstruction(
+              originalInstruction,
+              `Format the data ${formatDetails}`,
+              { verificationType: 'data-format' }
+            )
             break
           }
 
           case 'error':
-            refinedSelectorInstruction = `${originalInstruction}. If elements are not found, try alternative selectors. Handle any errors gracefully`
+            refinedSelectorInstruction = await this.createAIRefinedInstruction(
+              originalInstruction,
+              'If elements are not found, try alternative selectors. Handle any errors gracefully',
+              { verificationType: 'error-handling' }
+            )
             break
         }
 
-        this.log(`\n📝 Refined instruction: "${refinedSelectorInstruction}"`)
+        this.log(`\n🎯 AI-refined instruction:`)
+        this.log(refinedSelectorInstruction)
         await this.attemptWorkflow(refinedSelectorInstruction, flags, this.attempts)
         break
       }
@@ -1079,13 +1108,14 @@ IMPORTANT for suggestions:
         }])
 
         // Create a structured refinement that includes the output
-        const refinedWithFeedback = this.createRefinedInstruction(
+        const refinedWithFeedback = await this.createRefinedInstruction(
           instruction,
           lastSuccessfulAttempt?.result,
           feedbackText
         )
 
-        this.log('\n📝 Refining with your feedback...')
+        this.log('\n🎯 Refined instruction:')
+        this.log(refinedWithFeedback)
 
         // Keep previous attempts for context
         await this.attemptWorkflow(refinedWithFeedback, flags, this.attempts)
@@ -1204,13 +1234,18 @@ ${this.buildSystemPrompt().split('AVAILABLE COMMANDS:')[1]}`
 
       // Verify and handle next steps
       if (flags.interactive) {
+        const ora6 = (await import('ora')).default
+        const verifySpinner = ora6('🔍 Verifying results with AI...').start()
+        
         const verification = await this.verifyResults(
           `${originalInstruction} and then ${continuationInstruction}`,
           attempt,
           result
         )
+        
+        verifySpinner.succeed('🔍 AI Verification complete')
 
-        this.log("\n🔍 AI Verification:")
+        // Show verification to user
         this.log(verification.analysis)
 
         if (verification.success) {
@@ -1281,22 +1316,67 @@ ${this.buildSystemPrompt().split('AVAILABLE COMMANDS:')[1]}`
     return lines.join('\n')
   }
 
-  private createRefinedInstruction(
+  private async createRefinedInstruction(
     originalInstruction: string,
     lastResult: WorkflowExecutionResult | undefined,
     feedbackText: string
-  ): string {
-    let refinedInstruction = originalInstruction
+  ): Promise<string> {
+    // Use AI to intelligently refine the instruction
+    return await this.createAIRefinedInstruction(
+      originalInstruction,
+      feedbackText,
+      { lastResult }
+    )
+  }
 
-    // Add comprehensive context about the previous execution
-    if (lastResult) {
-      const previousResultSummary = this.formatResultForFeedback(lastResult)
-      refinedInstruction += `\n\nPREVIOUS EXECUTION RESULTS:\n${previousResultSummary}`
+  private async createAIRefinedInstruction(
+    originalInstruction: string,
+    feedbackOrSuggestion: string,
+    context?: {
+      lastResult?: WorkflowExecutionResult,
+      verificationType?: string
     }
+  ): Promise<string> {
+    const refinementPrompt = `You are refining a browser automation instruction based on user feedback.
 
-    // Add the user's feedback
-    refinedInstruction += `\n\nUSER FEEDBACK: ${feedbackText}`
+ORIGINAL INSTRUCTION:
+"${originalInstruction}"
 
-    return refinedInstruction
+${context?.lastResult ? `PREVIOUS EXECUTION RESULTS:
+${this.formatResultForFeedback(context.lastResult)}` : ''}
+
+USER FEEDBACK/SUGGESTION:
+"${feedbackOrSuggestion}"
+
+${context?.verificationType ? `REFINEMENT TYPE: ${context.verificationType}` : ''}
+
+YOUR TASK:
+Create a single, refined instruction that:
+1. Incorporates the user's feedback into the original instruction
+2. Removes any contradictions or redundancies
+3. Maintains the original goal while applying the improvements
+4. Is clear and specific without being overly prescriptive
+5. Avoids accumulating conflicting instructions
+
+IMPORTANT:
+- DO NOT just append the feedback to the original
+- DO NOT include meta-instructions like "remember to" or "make sure to"
+- DO NOT reference previous attempts or failures
+- Create ONE coherent instruction that achieves the goal
+
+Return ONLY the refined instruction text, nothing else.`
+
+    const ora7 = (await import('ora')).default
+    const refineSpinner = ora7('🤖 Refining instruction with AI...').start()
+    
+    try {
+      const refinedInstruction = await askClaude(refinementPrompt)
+      refineSpinner.succeed('🤖 Instruction refined')
+      return refinedInstruction.trim()
+    } catch (error) {
+      refineSpinner.fail('🤖 Failed to refine instruction')
+      // Fallback to simple append if AI refinement fails
+      return `${originalInstruction}. ${feedbackOrSuggestion}`
+    }
   }
 }

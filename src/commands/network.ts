@@ -218,7 +218,7 @@ export default class Network extends BaseCommand {
     }, flags.duration)
     
     // Handle Ctrl+C
-    process.on('SIGINT', () => {
+    process.once('SIGINT', () => {
       clearTimeout(timeout)
       this.stopMonitoring()
     })

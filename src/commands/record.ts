@@ -175,7 +175,7 @@ export default class Record extends BaseCommand {
     }, flags.duration)
 
     // Handle Ctrl+C
-    process.on('SIGINT', () => {
+    process.once('SIGINT', () => {
       clearTimeout(timeout)
       this.stopRecording(pollInterval)
     })
