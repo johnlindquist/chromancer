@@ -7,7 +7,7 @@ import { DOMInspector } from "../utils/dom-inspector.js"
 import { RunLogManager } from "../utils/run-log.js"
 import { DOMDigestCollector } from "../utils/dom-digest.js"
 import * as yaml from "yaml"
-import { input, confirm, select, Separator } from "@inquirer/prompts"
+import { input, confirm, select } from "@inquirer/prompts"
 import type { WorkflowExecutionResult } from "../types/workflow.js"
 
 interface WorkflowAttempt {
@@ -822,8 +822,13 @@ Consider using broader selectors first to test, then narrow down.`
           value: `suggestion_${index}`
         })
       }
-      // Add separator
-      choices.push(new Separator('─────────────────'))
+      // Note: Separators don't work well with new @inquirer/prompts
+      // Add a disabled choice as visual separator instead
+      choices.push({
+        name: '───── Other Options ─────',
+        value: '',
+        disabled: true
+      })
     }
 
     // Add standard choices
