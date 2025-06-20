@@ -793,22 +793,6 @@ Consider using broader selectors first to test, then narrow down.`
       this.log(analysis)
     } else {
       lastAttempt.claudeAnalysis = verification.analysis
-
-      // Show suggestions if available
-      if (verification.suggestions && verification.suggestions.length > 0) {
-        this.log("\n💡 Suggestions for improvement:")
-        for (const [index, suggestion] of verification.suggestions.entries()) {
-          const isFavorite = verification.favoriteSuggestion === index
-          const prefix = isFavorite ? '⭐' : '  '
-          this.log(`   ${prefix} ${index + 1}. ${suggestion}`)
-        }
-        
-        // Show AI's reasoning for its favorite
-        if (verification.favoriteReasoning && verification.favoriteSuggestion !== undefined) {
-          this.log(`\n🤖 AI recommends option ${verification.favoriteSuggestion + 1}:`)
-          this.log(`   ${verification.favoriteReasoning}`)
-        }
-      }
       
       // If debug mode, add hint about arrow keys
       if (flags.debug && !flags.auto) {
