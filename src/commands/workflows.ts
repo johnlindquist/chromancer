@@ -22,19 +22,17 @@ export default class Workflows extends BaseCommand {
   static description = 'Manage saved Chromancer workflows'
 
   private async stabilizeTerminal(): Promise<void> {
+    // Since we're using @inquirer/prompts everywhere, we just need minimal cleanup
+    // Inquirer handles all the terminal state management for us
+    
     // Ensure cursor is visible
     process.stdout.write('\x1b[?25h')
     
     // Clear any residual line content
     process.stdout.write('\r\x1b[K')
     
-    // Small delay to let terminal stabilize
-    await new Promise(resolve => setTimeout(resolve, 50))
-    
-    // Ensure stdout is flushed
-    if (process.stdout.write('')) {
-      await new Promise(resolve => process.stdout.once('drain', resolve))
-    }
+    // Small delay to let any pending output complete
+    await new Promise(resolve => setTimeout(resolve, 10))
   }
 
   static examples = [

@@ -66,6 +66,10 @@ export default class AI extends BaseCommand {
       description: "Automatically apply AI's favorite suggestion and retry until success",
       default: false,
     }),
+    debug: Flags.boolean({
+      description: "Enable debug logging for terminal states and interactions",
+      default: false,
+    }),
   }
 
   static args = {
@@ -83,25 +87,22 @@ export default class AI extends BaseCommand {
     this.runLogManager = new RunLogManager()
   }
 
-  private async stabilizeTerminal(): Promise<void> {
+  private async stabilizeTerminal(debug = false): Promise<void> {
+    // Since we're using @inquirer/prompts everywhere, we just need minimal cleanup
+    // Inquirer handles all the terminal state management for us
+    
+    if (debug) {
+      this.log('\n[DEBUG] stabilizeTerminal() called - simplified version')
+    }
+    
     // Ensure cursor is visible
     process.stdout.write('\x1b[?25h')
     
     // Clear any residual line content
     process.stdout.write('\r\x1b[K')
     
-    // Ensure terminal is in raw mode for @inquirer/prompts
-    if (process.stdin.isTTY && !process.stdin.isRaw && process.stdin.setRawMode) {
-      process.stdin.setRawMode(true)
-    }
-    
-    // Small delay to let terminal stabilize
-    await new Promise(resolve => setTimeout(resolve, 50))
-    
-    // Ensure stdout is flushed
-    if (process.stdout.write('')) {
-      await new Promise(resolve => process.stdout.once('drain', resolve))
-    }
+    // Small delay to let any pending output complete
+    await new Promise(resolve => setTimeout(resolve, 10))
   }
 
   async run(): Promise<void> {
@@ -336,7 +337,7 @@ ${instruction}
           // In auto mode, just save and exit on success
           if (flags.auto) {
             this.log('\n🎉 Auto mode: Workflow succeeded!')
-            await this.promptSaveWorkflow(instruction, yamlText, false)
+            await this.promptSaveWorkflow(instruction, yamlText, false, flags.debug as boolean)
             process.exit(0)
           } else {
             await this.handleSuccessfulWorkflow(instruction, yamlText, flags)
@@ -637,6 +638,7 @@ Consider using broader selectors first to test, then narrow down.`
       result = await executor.execute(workflow, {
         strict: flags["early-bailout"] as boolean, // Use early bailout flag
         captureOutput: true,
+        debug: flags.debug as boolean,
         onStepStart: (stepNumber, command, args) => {
           // Stop previous spinner if exists
           if (currentStepSpinner) {
@@ -781,6 +783,12 @@ Consider using broader selectors first to test, then narrow down.`
           this.log(`   ${verification.favoriteReasoning}`)
         }
       }
+      
+      // If debug mode, add hint about arrow keys
+      if (flags.debug && !flags.auto) {
+        this.log('\n[DEBUG] If arrow keys are not working, check the terminal state logs above')
+        this.log('[DEBUG] Arrow keys should produce: Up=0x1b 0x5b 0x41, Down=0x1b 0x5b 0x42')
+      }
     }
 
     // Auto mode: automatically select AI's favorite suggestion
@@ -839,13 +847,115 @@ Consider using broader selectors first to test, then narrow down.`
       { name: '🚪 Exit without saving', value: 'quit' }
     )
 
-    // Ensure terminal is in proper state for interactive prompt
-    await this.stabilizeTerminal()
+    // Debug logging for menu state
+    if (flags.debug) {
+      this.log('\n[DEBUG] About to show select menu')
+      this.log(`[DEBUG] Number of choices: ${choices.length}`)
+      this.log(`[DEBUG] Choices:`)
+      choices.forEach((c, i) => {
+        this.log(`  ${i}: ${c.name} -> ${c.value}`)
+      })
+    }
     
-    const action = await select<string>({
-      message: 'The workflow needs improvement. What would you like to do?',
-      choices
-    })
+    // Ensure terminal is in proper state for interactive prompt
+    await this.stabilizeTerminal(flags.debug as boolean)
+    
+    // Quick stdin test in debug mode
+    if (flags.debug) {
+      this.log('\n[DEBUG] Testing stdin before select prompt...')
+      this.log('[DEBUG] Press any key to continue (or wait 3 seconds)...')
+      
+      const testPromise = new Promise<void>((resolve) => {
+        let received = false
+        const timeout = setTimeout(() => {
+          if (!received) {
+            this.log('[DEBUG] No stdin input received in 3 seconds')
+          }
+          resolve()
+        }, 3000)
+        
+        const testListener = (data: Buffer) => {
+          received = true
+          clearTimeout(timeout)
+          const bytes = Array.from(data).map(b => `0x${b.toString(16).padStart(2, '0')}`).join(' ')
+          this.log(`[DEBUG] stdin test received: ${bytes} (${JSON.stringify(data.toString())})`)
+          process.stdin.off('data', testListener)
+          resolve()
+        }
+        
+        process.stdin.on('data', testListener)
+      })
+      
+      await testPromise
+    }
+    
+    let action: string
+    
+    if (flags.debug) {
+      this.log('\n[DEBUG] About to call select() prompt')
+      this.log(`[DEBUG] process.stdin properties:`)
+      this.log(`  - readable: ${process.stdin.readable}`)
+      this.log(`  - paused: ${process.stdin.isPaused?.() ?? 'N/A'}`)
+      this.log(`  - destroyed: ${process.stdin.destroyed}`)
+      this.log(`  - readableFlowing: ${process.stdin.readableFlowing}`)
+      
+      // Monitor ALL stdin events
+      const events = ['data', 'readable', 'end', 'error', 'pause', 'resume'];
+      const listeners: Map<string, any> = new Map();
+      
+      events.forEach(event => {
+        const listener = event === 'data' 
+          ? (data: Buffer) => {
+              const bytes = Array.from(data).map(b => `0x${b.toString(16).padStart(2, '0')}`).join(' ')
+              this.log(`[DEBUG] stdin '${event}' event: ${bytes} (${JSON.stringify(data.toString())})`)
+            }
+          : (...args: any[]) => {
+              this.log(`[DEBUG] stdin '${event}' event fired`)
+            };
+        
+        listeners.set(event, listener);
+        process.stdin.on(event, listener);
+      });
+      
+      // Also monitor process for keypress events
+      const keypressListener = (ch: any, key: any) => {
+        this.log(`[DEBUG] process keypress event: ch=${JSON.stringify(ch)}, key=${JSON.stringify(key)}`)
+      };
+      process.on('keypress' as any, keypressListener);
+      
+      this.log('[DEBUG] Event listeners attached, calling select...')
+      
+      try {
+        action = await select<string>({
+          message: 'The workflow needs improvement. What would you like to do?',
+          choices
+        })
+        
+        // Clean up listeners
+        events.forEach(event => {
+          const listener = listeners.get(event);
+          if (listener) process.stdin.off(event, listener);
+        });
+        process.off('keypress' as any, keypressListener);
+        
+        this.log(`[DEBUG] Select returned: ${action}`)
+      } catch (error) {
+        // Clean up listeners on error
+        events.forEach(event => {
+          const listener = listeners.get(event);
+          if (listener) process.stdin.off(event, listener);
+        });
+        process.off('keypress' as any, keypressListener);
+        
+        this.log(`[DEBUG] Select threw error: ${error}`)
+        throw error
+      }
+    } else {
+      action = await select<string>({
+        message: 'The workflow needs improvement. What would you like to do?',
+        choices
+      })
+    }
 
     // Handle suggestion selections
     if (action.startsWith('suggestion_')) {
@@ -875,7 +985,7 @@ Consider using broader selectors first to test, then narrow down.`
         break
 
       case 'modify': {
-        await this.stabilizeTerminal()
+        await this.stabilizeTerminal(flags.debug as boolean)
         const newInstruction = await input({
           message: 'Enter modified instruction:',
           default: originalInstruction
@@ -897,7 +1007,7 @@ Consider using broader selectors first to test, then narrow down.`
           this.log(resultSummary)
         }
 
-        await this.stabilizeTerminal()
+        await this.stabilizeTerminal(flags.debug as boolean)
         const feedbackText = await input({
           message: 'What needs to be corrected or improved?',
           validate: (value) => value.trim().length > 0 || 'Please provide your feedback'
@@ -919,7 +1029,7 @@ Consider using broader selectors first to test, then narrow down.`
       }
 
       case 'refine': {
-        await this.stabilizeTerminal()
+        await this.stabilizeTerminal(flags.debug as boolean)
         const refinementType = await select<string>({
           message: 'What would you like to refine?',
           choices: [
@@ -934,7 +1044,7 @@ Consider using broader selectors first to test, then narrow down.`
 
         switch (refinementType) {
           case 'element': {
-            await this.stabilizeTerminal()
+            await this.stabilizeTerminal(flags.debug as boolean)
             const elementDetails = await input({
               message: 'Describe the element more specifically (e.g., "the blue submit button", "link containing \'Login\'"):'
             })
@@ -947,7 +1057,7 @@ Consider using broader selectors first to test, then narrow down.`
           }
 
           case 'wait': {
-            await this.stabilizeTerminal()
+            await this.stabilizeTerminal(flags.debug as boolean)
             const waitDetails = await input({
               message: 'What should we wait for? (e.g., "wait for loading spinner to disappear", "wait 2 seconds"):'
             })
@@ -960,7 +1070,7 @@ Consider using broader selectors first to test, then narrow down.`
           }
 
           case 'format': {
-            await this.stabilizeTerminal()
+            await this.stabilizeTerminal(flags.debug as boolean)
             const formatDetails = await input({
               message: 'How should the data be formatted? (e.g., "as CSV", "only titles", "include links"):'
             })
@@ -988,7 +1098,7 @@ Consider using broader selectors first to test, then narrow down.`
       }
 
       case 'save':
-        await this.promptSaveWorkflow(originalInstruction, lastAttempt.yaml, true) // Skip confirmation since user chose "Save anyway"
+        await this.promptSaveWorkflow(originalInstruction, lastAttempt.yaml, true, flags.debug as boolean) // Skip confirmation since user chose "Save anyway"
         break
 
       case 'quit':
@@ -998,9 +1108,9 @@ Consider using broader selectors first to test, then narrow down.`
     }
   }
 
-  private async promptSaveWorkflow(instruction: string, yamlText: string, skipConfirmation = false): Promise<void> {
+  private async promptSaveWorkflow(instruction: string, yamlText: string, skipConfirmation = false, debug = false): Promise<void> {
     if (!skipConfirmation) {
-      await this.stabilizeTerminal()
+      await this.stabilizeTerminal(debug)
       const shouldSave = await confirm({
         message: 'Would you like to save this workflow?',
         default: true
@@ -1012,18 +1122,18 @@ Consider using broader selectors first to test, then narrow down.`
       }
     }
 
-    await this.stabilizeTerminal()
+    await this.stabilizeTerminal(debug)
     const name = await input({
       message: 'Workflow name:',
       validate: (value) => value.length > 0 || 'Name is required'
     })
 
-    await this.stabilizeTerminal()
+    await this.stabilizeTerminal(debug)
     const description = await input({
       message: 'Description (optional):'
     })
 
-    await this.stabilizeTerminal()
+    await this.stabilizeTerminal(debug)
     const tags = await input({
       message: 'Tags (comma-separated, optional):'
     })
@@ -1187,7 +1297,67 @@ IMPORTANT for suggestions:
     yamlText: string,
     flags: Record<string, unknown>
   ): Promise<void> {
-    await this.stabilizeTerminal()
+    // Ensure stdin is properly initialized before showing menu
+    if (flags.debug) {
+      this.log('\n[DEBUG] handleSuccessfulWorkflow - checking stdin state')
+      this.log(`[DEBUG] stdin.isTTY: ${process.stdin.isTTY}`)
+      this.log(`[DEBUG] stdin.isRaw: ${process.stdin.isRaw}`)
+      this.log(`[DEBUG] stdin.isPaused: ${process.stdin.isPaused?.() ?? 'N/A'}`)
+    }
+    
+    // Force stdin to be in the right state
+    if (process.stdin.isTTY) {
+      // Ensure stdin is not paused
+      if (process.stdin.isPaused?.()) {
+        if (flags.debug) {
+          this.log('[DEBUG] stdin is paused, resuming...')
+        }
+        process.stdin.resume()
+      }
+      
+      // Small delay to let stdin stabilize
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    
+    await this.stabilizeTerminal(flags.debug as boolean)
+    
+    // Additional debug check right before select
+    if (flags.debug) {
+      this.log('\n[DEBUG] About to show success menu')
+      this.log(`[DEBUG] Final stdin check:`)
+      this.log(`  - stdin.isTTY: ${process.stdin.isTTY}`)
+      this.log(`  - stdin.isRaw: ${process.stdin.isRaw}`)
+      this.log(`  - stdin.isPaused: ${process.stdin.isPaused?.() ?? 'N/A'}`)
+      this.log(`  - stdin.readableFlowing: ${process.stdin.readableFlowing}`)
+      
+      // Test if stdin is actually responsive
+      this.log('\n[DEBUG] Testing stdin responsiveness...')
+      this.log('[DEBUG] Press any key within 3 seconds to test stdin (or wait for timeout)...')
+      
+      const testPromise = new Promise<void>((resolve) => {
+        let received = false
+        const timeout = setTimeout(() => {
+          if (!received) {
+            this.log('[DEBUG] stdin test timeout - no input received!')
+          }
+          resolve()
+        }, 3000)
+        
+        const testListener = (data: Buffer) => {
+          received = true
+          clearTimeout(timeout)
+          const bytes = Array.from(data).map(b => `0x${b.toString(16).padStart(2, '0')}`).join(' ')
+          this.log(`[DEBUG] stdin test received: ${bytes} (${JSON.stringify(data.toString())})`)
+          process.stdin.off('data', testListener)
+          resolve()
+        }
+        
+        process.stdin.on('data', testListener)
+      })
+      
+      await testPromise
+    }
+    
     const action = await select<string>({
       message: 'The workflow succeeded! What would you like to do?',
       choices: [
@@ -1202,7 +1372,7 @@ IMPORTANT for suggestions:
 
     switch (action) {
       case 'save':
-        await this.promptSaveWorkflow(instruction, yamlText, true) // Skip confirmation since user already chose to save
+        await this.promptSaveWorkflow(instruction, yamlText, true, flags.debug as boolean) // Skip confirmation since user already chose to save
         break
 
       case 'run':
@@ -1211,7 +1381,7 @@ IMPORTANT for suggestions:
         break
 
       case 'modify': {
-        await this.stabilizeTerminal()
+        await this.stabilizeTerminal(flags.debug as boolean)
         const newInstruction = await input({
           message: 'Enter modified instruction:',
           default: instruction
@@ -1232,7 +1402,7 @@ IMPORTANT for suggestions:
           this.log(resultSummary)
         }
 
-        await this.stabilizeTerminal()
+        await this.stabilizeTerminal(flags.debug as boolean)
         const feedbackText = await input({
           message: 'What needs to be different about the results?',
           validate: (value) => value.trim().length > 0 || 'Please provide your feedback'
@@ -1261,7 +1431,7 @@ IMPORTANT for suggestions:
         const currentUrl = this.page.url()
         this.log(`📍 Current page: ${currentUrl}`)
 
-        await this.stabilizeTerminal()
+        await this.stabilizeTerminal(flags.debug as boolean)
         const continuationInstruction = await input({
           message: 'What would you like to do next from this page?',
           validate: (value) => value.trim().length > 0 || 'Please describe what to do next'

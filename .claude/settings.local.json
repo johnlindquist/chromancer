@@ -46,7 +46,10 @@
       "Bash(pnpm link:*)",
       "Bash(find:*)",
       "Bash(rg:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(rg:*)",
+      "Bash(./test-arrow-keys-manual.sh:*)"
     ],
     "deny": []
   }

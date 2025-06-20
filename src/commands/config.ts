@@ -1,6 +1,7 @@
 import { Args, Flags } from '@oclif/core'
 import { Command } from '@oclif/core'
 import { config } from '../utils/config.js'
+import { confirm } from '@inquirer/prompts'
 
 const chalk = {
   green: (s: string) => `\x1b[32m${s}\x1b[0m`,
@@ -134,15 +135,18 @@ export default class Config extends Command {
   private async resetConfig(): Promise<void> {
     console.log(chalk.yellow('⚠️  This will reset all configuration to defaults'))
     
-    // Simple confirmation
-    console.log('\nPress Enter to confirm or Ctrl+C to cancel')
-    await new Promise(resolve => {
-      process.stdin.once('data', resolve)
-      process.stdin.resume()
+    // Use inquirer for confirmation
+    const shouldReset = await confirm({
+      message: 'Are you sure you want to reset all configuration?',
+      default: false
     })
     
-    await config.reset()
-    console.log(chalk.green('✅ Configuration reset to defaults'))
+    if (shouldReset) {
+      await config.reset()
+      console.log(chalk.green('✅ Configuration reset to defaults'))
+    } else {
+      console.log(chalk.gray('Configuration reset cancelled'))
+    }
   }
 
   private showPath(): void {

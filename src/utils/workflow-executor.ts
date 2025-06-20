@@ -6,8 +6,7 @@ import { RunLogManager } from './run-log.js';
 import { DOMDigest } from './dom-digest.js';
 import { normalizeSelector, isValidSelector, formatSelectorForError, suggestSelectorFix } from './selector-normalizer.js';
 import { DOMInspector } from './dom-inspector.js';
-import * as readline from 'node:readline/promises';
-import { stdin, stdout } from 'node:process';
+import { input } from '@inquirer/prompts';
 
 interface WorkflowStep {
   [command: string]: any;
@@ -20,6 +19,7 @@ interface WorkflowOptions {
   captureOutput?: boolean;
   onStepStart?: (stepNumber: number, command: string, args: any) => void;
   onStepComplete?: (stepNumber: number, command: string, success: boolean) => void;
+  debug?: boolean;
 }
 
 export class WorkflowExecutor {
@@ -262,20 +262,16 @@ export class WorkflowExecutor {
           // Interactive wait - wait for user input
           const message = args.message || 'Press Enter to continue...';
           
-          // Capture current raw mode state
-          const wasRaw = process.stdin.isRaw;
-          
-          const rl = readline.createInterface({ input: stdin, output: stdout });
-          
-          // Display the message and wait for user input
-          console.log(`\n⏸️  ${message}`);
-          await rl.question('');
-          rl.close();
-          
-          // Restore raw mode if it was previously on
-          if (wasRaw && process.stdin.setRawMode) {
-            process.stdin.setRawMode(true);
+          if (options.debug) {
+            console.log('\n[DEBUG] Wait command with message - using @inquirer/prompts');
           }
+          
+          // Display the message and wait for user input using inquirer
+          console.log(`\n⏸️  ${message}`);
+          await input({
+            message: '',
+            default: ''
+          });
           
           output = `User continued after: "${message}"`;
         } else if (args.selector) {

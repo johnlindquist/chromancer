@@ -64,3 +64,4 @@ temp/
 
 # oclif manifest
 oclif.manifest.json
+.chromancer
