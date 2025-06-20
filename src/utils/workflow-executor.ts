@@ -261,12 +261,21 @@ export class WorkflowExecutor {
         } else if (args.message) {
           // Interactive wait - wait for user input
           const message = args.message || 'Press Enter to continue...';
+          
+          // Capture current raw mode state
+          const wasRaw = process.stdin.isRaw;
+          
           const rl = readline.createInterface({ input: stdin, output: stdout });
           
           // Display the message and wait for user input
           console.log(`\n⏸️  ${message}`);
           await rl.question('');
           rl.close();
+          
+          // Restore raw mode if it was previously on
+          if (wasRaw && process.stdin.setRawMode) {
+            process.stdin.setRawMode(true);
+          }
           
           output = `User continued after: "${message}"`;
         } else if (args.selector) {

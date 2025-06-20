@@ -90,6 +90,11 @@ export default class AI extends BaseCommand {
     // Clear any residual line content
     process.stdout.write('\r\x1b[K')
     
+    // Ensure terminal is in raw mode for @inquirer/prompts
+    if (process.stdin.isTTY && !process.stdin.isRaw && process.stdin.setRawMode) {
+      process.stdin.setRawMode(true)
+    }
+    
     // Small delay to let terminal stabilize
     await new Promise(resolve => setTimeout(resolve, 50))
     
@@ -810,7 +815,7 @@ Consider using broader selectors first to test, then narrow down.`
     }
 
     // Build menu choices with suggestions as first options
-    const choices: any[] = []
+    const choices: Array<{ name: string; value: string }> = []
 
     // Add suggestion-based choices first
     if (verification?.suggestions?.length) {
@@ -822,13 +827,6 @@ Consider using broader selectors first to test, then narrow down.`
           value: `suggestion_${index}`
         })
       }
-      // Note: Separators don't work well with new @inquirer/prompts
-      // Add a disabled choice as visual separator instead
-      choices.push({
-        name: '───── Other Options ─────',
-        value: '',
-        disabled: true
-      })
     }
 
     // Add standard choices
@@ -841,7 +839,9 @@ Consider using broader selectors first to test, then narrow down.`
       { name: '🚪 Exit without saving', value: 'quit' }
     )
 
+    // Ensure terminal is in proper state for interactive prompt
     await this.stabilizeTerminal()
+    
     const action = await select<string>({
       message: 'The workflow needs improvement. What would you like to do?',
       choices
