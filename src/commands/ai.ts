@@ -468,7 +468,19 @@ LEARNING FROM FAILURES:
 - When you see previous attempts with runtime output, analyze what went wrong
 - DO NOT append to or modify the previous YAML - start completely fresh
 - Use the runtime errors to understand what selectors/approaches don't work
-- Apply lessons learned to create a working solution from scratch`
+- Apply lessons learned to create a working solution from scratch
+
+CHECKPOINT USAGE:
+- Use checkpoint command to mark key decision points in workflows
+- Good places for checkpoints:
+  - After successful login/authentication
+  - Before major navigation to different sections
+  - After completing a logical group of actions
+  - Before actions that might have multiple paths
+- Example: 
+  - checkpoint: "logged-in"
+  - checkpoint: {name: "search-results-loaded"}
+- This allows users to continue workflows from specific points later`
 
     // Add current page context if available
     if (domQuickScan) {
@@ -1322,6 +1334,55 @@ IMPORTANT for suggestions:
         const currentUrl = this.page.url()
         this.log(`📍 Current page: ${currentUrl}`)
 
+        // Check if there are any checkpoints in the last result
+        const lastResult = this.attempts[this.attempts.length - 1]?.result
+        const checkpoints = lastResult?.checkpoints || []
+        
+        if (checkpoints.length > 0) {
+          this.log('\n📌 Available checkpoints:')
+          checkpoints.forEach((cp, idx) => {
+            this.log(`  ${idx + 1}. ${cp.name || cp.id} (Step ${cp.stepNumber}, ${cp.pageState.title})`)
+          })
+          
+          await this.stabilizeTerminal(flags.debug as boolean)
+          const useCheckpoint = await this.safePrompt(() => confirm({
+            message: 'Would you like to continue from a specific checkpoint?',
+            default: false
+          }))
+          
+          if (useCheckpoint) {
+            const checkpointChoices = checkpoints.map((cp, idx) => ({
+              name: `${cp.name || cp.id} - Step ${cp.stepNumber} (${cp.pageState.title})`,
+              value: idx
+            }))
+            
+            const selectedIdx = await this.safePrompt(() => select<number>({
+              message: 'Select a checkpoint to continue from:',
+              choices: checkpointChoices
+            }))
+            
+            if (selectedIdx !== null) {
+              const selectedCheckpoint = checkpoints[selectedIdx]
+              this.log(`\n📌 Continuing from checkpoint: ${selectedCheckpoint.name || selectedCheckpoint.id}`)
+              
+              // Truncate workflow to checkpoint
+              const workflow = yaml.parse(yamlText) as any[]
+              const truncatedWorkflow = workflow.slice(0, selectedCheckpoint.stepNumber)
+              const truncatedYaml = yaml.stringify(truncatedWorkflow)
+              
+              await this.stabilizeTerminal(flags.debug as boolean)
+              const continuationInstruction = await this.safePrompt(() => input({
+                message: 'What would you like to do from this checkpoint?',
+                validate: (value) => value.trim().length > 0 || 'Please describe what to do next'
+              }))
+              if (!continuationInstruction) return
+              
+              await this.continueWorkflow(instruction, truncatedYaml, continuationInstruction, flags)
+              return
+            }
+          }
+        }
+
         await this.stabilizeTerminal(flags.debug as boolean)
         const continuationInstruction = await this.safePrompt(() => input({
           message: 'What would you like to do next from this page?',
@@ -1383,6 +1444,8 @@ IMPORTANT RULES:
 3. Start your YAML output with the first new step
 4. The new steps should seamlessly continue from where the existing workflow left off
 5. Return ONLY valid YAML - no explanations
+6. Consider adding checkpoint commands at key decision points where the user might want to branch later
+7. Use checkpoints before major page transitions or after completing logical sections
 
 ${this.buildSystemPrompt().split('AVAILABLE COMMANDS:')[1]}`
 
