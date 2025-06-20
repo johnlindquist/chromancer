@@ -85,6 +85,10 @@ export default class AI extends BaseCommand {
   constructor(argv: string[], config: Config) {
     super(argv, config)
     this.runLogManager = new RunLogManager()
+    
+    // Increase max listeners to prevent warnings when using multiple prompts
+    // @inquirer/prompts adds listeners for each prompt call
+    process.setMaxListeners(0) // 0 = unlimited
   }
 
   private async stabilizeTerminal(debug = false): Promise<void> {
@@ -120,6 +124,17 @@ export default class AI extends BaseCommand {
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(AI)
+
+    // Handle exit errors from @inquirer/prompts gracefully
+    process.on('uncaughtException', (error) => {
+      if (error instanceof Error && error.name === 'ExitPromptError') {
+        this.log('\n\n✋ Operation cancelled')
+        process.exit(0)
+      } else {
+        // Rethrow unknown errors
+        throw error
+      }
+    })
 
     // Initial attempt
     await this.attemptWorkflow(args.instruction, flags)
@@ -832,6 +847,13 @@ Consider using broader selectors first to test, then narrow down.`
       return
     }
 
+    // Show AI's recommendation
+    if (verification?.suggestions?.length && verification.favoriteSuggestion !== undefined) {
+      const recommendedSuggestion = verification.suggestions[verification.favoriteSuggestion]
+      this.log(`\n🤖 AI recommends option ${verification.favoriteSuggestion + 1}:`)
+      this.log(`   ${recommendedSuggestion}`)
+    }
+
     // Build menu choices with suggestions as first options
     const choices: Array<{ name: string; value: string }> = []
 
@@ -1170,8 +1192,17 @@ ${domAnalysis ? `\n${domAnalysis}\n` : ''}
 
 VERIFICATION TASK:
 1. Analyze if the workflow achieved what the user requested
-2. Check if any extracted data looks correct and complete
-3. Identify any potential issues or missing steps
+2. CRITICALLY IMPORTANT: Check if extracted data actually matches what the user asked for
+   - If user asked for "lesson titles", verify the extracted items are actually lesson titles
+   - If user asked for "Cursor" content, verify the results relate to Cursor/cursor topics
+   - Generic terms like "React", "TypeScript" etc. are NOT lesson titles - they're categories or tags
+3. Check the final URL - did we navigate to the expected page?
+4. Identify any potential issues or missing steps
+
+SPECIFIC CHECKS FOR DATA EXTRACTION:
+- Does the extracted data match the type requested? (e.g., "lesson titles" should be specific course/lesson names, not general topics)
+- Does the content relate to the search term used? (e.g., searching for "Cursor" should return Cursor-related content)
+- Are we on the right page? (check URL and page title)
 
 Please provide:
 1. A brief analysis (2-3 sentences) of the results
