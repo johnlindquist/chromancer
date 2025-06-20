@@ -860,102 +860,17 @@ Consider using broader selectors first to test, then narrow down.`
     // Ensure terminal is in proper state for interactive prompt
     await this.stabilizeTerminal(flags.debug as boolean)
     
-    // Quick stdin test in debug mode
-    if (flags.debug) {
-      this.log('\n[DEBUG] Testing stdin before select prompt...')
-      this.log('[DEBUG] Press any key to continue (or wait 3 seconds)...')
-      
-      const testPromise = new Promise<void>((resolve) => {
-        let received = false
-        const timeout = setTimeout(() => {
-          if (!received) {
-            this.log('[DEBUG] No stdin input received in 3 seconds')
-          }
-          resolve()
-        }, 3000)
-        
-        const testListener = (data: Buffer) => {
-          received = true
-          clearTimeout(timeout)
-          const bytes = Array.from(data).map(b => `0x${b.toString(16).padStart(2, '0')}`).join(' ')
-          this.log(`[DEBUG] stdin test received: ${bytes} (${JSON.stringify(data.toString())})`)
-          process.stdin.off('data', testListener)
-          resolve()
-        }
-        
-        process.stdin.on('data', testListener)
-      })
-      
-      await testPromise
-    }
-    
     let action: string
     
     if (flags.debug) {
       this.log('\n[DEBUG] About to call select() prompt')
-      this.log(`[DEBUG] process.stdin properties:`)
-      this.log(`  - readable: ${process.stdin.readable}`)
-      this.log(`  - paused: ${process.stdin.isPaused?.() ?? 'N/A'}`)
-      this.log(`  - destroyed: ${process.stdin.destroyed}`)
-      this.log(`  - readableFlowing: ${process.stdin.readableFlowing}`)
-      
-      // Monitor ALL stdin events
-      const events = ['data', 'readable', 'end', 'error', 'pause', 'resume'];
-      const listeners: Map<string, any> = new Map();
-      
-      events.forEach(event => {
-        const listener = event === 'data' 
-          ? (data: Buffer) => {
-              const bytes = Array.from(data).map(b => `0x${b.toString(16).padStart(2, '0')}`).join(' ')
-              this.log(`[DEBUG] stdin '${event}' event: ${bytes} (${JSON.stringify(data.toString())})`)
-            }
-          : (...args: any[]) => {
-              this.log(`[DEBUG] stdin '${event}' event fired`)
-            };
-        
-        listeners.set(event, listener);
-        process.stdin.on(event, listener);
-      });
-      
-      // Also monitor process for keypress events
-      const keypressListener = (ch: any, key: any) => {
-        this.log(`[DEBUG] process keypress event: ch=${JSON.stringify(ch)}, key=${JSON.stringify(key)}`)
-      };
-      process.on('keypress' as any, keypressListener);
-      
-      this.log('[DEBUG] Event listeners attached, calling select...')
-      
-      try {
-        action = await select<string>({
-          message: 'The workflow needs improvement. What would you like to do?',
-          choices
-        })
-        
-        // Clean up listeners
-        events.forEach(event => {
-          const listener = listeners.get(event);
-          if (listener) process.stdin.off(event, listener);
-        });
-        process.off('keypress' as any, keypressListener);
-        
-        this.log(`[DEBUG] Select returned: ${action}`)
-      } catch (error) {
-        // Clean up listeners on error
-        events.forEach(event => {
-          const listener = listeners.get(event);
-          if (listener) process.stdin.off(event, listener);
-        });
-        process.off('keypress' as any, keypressListener);
-        
-        this.log(`[DEBUG] Select threw error: ${error}`)
-        throw error
-      }
-    } else {
-      action = await select<string>({
-        message: 'The workflow needs improvement. What would you like to do?',
-        choices
-      })
+      this.log(`[DEBUG] Terminal is ready for Inquirer prompt`)
     }
+    
+    action = await select<string>({
+      message: 'The workflow needs improvement. What would you like to do?',
+      choices
+    })
 
     // Handle suggestion selections
     if (action.startsWith('suggestion_')) {
@@ -1297,65 +1212,11 @@ IMPORTANT for suggestions:
     yamlText: string,
     flags: Record<string, unknown>
   ): Promise<void> {
-    // Ensure stdin is properly initialized before showing menu
-    if (flags.debug) {
-      this.log('\n[DEBUG] handleSuccessfulWorkflow - checking stdin state')
-      this.log(`[DEBUG] stdin.isTTY: ${process.stdin.isTTY}`)
-      this.log(`[DEBUG] stdin.isRaw: ${process.stdin.isRaw}`)
-      this.log(`[DEBUG] stdin.isPaused: ${process.stdin.isPaused?.() ?? 'N/A'}`)
-    }
-    
-    // Force stdin to be in the right state
-    if (process.stdin.isTTY) {
-      // Ensure stdin is not paused
-      if (process.stdin.isPaused?.()) {
-        if (flags.debug) {
-          this.log('[DEBUG] stdin is paused, resuming...')
-        }
-        process.stdin.resume()
-      }
-      
-      // Small delay to let stdin stabilize
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
-    
     await this.stabilizeTerminal(flags.debug as boolean)
     
-    // Additional debug check right before select
     if (flags.debug) {
       this.log('\n[DEBUG] About to show success menu')
-      this.log(`[DEBUG] Final stdin check:`)
-      this.log(`  - stdin.isTTY: ${process.stdin.isTTY}`)
-      this.log(`  - stdin.isRaw: ${process.stdin.isRaw}`)
-      this.log(`  - stdin.isPaused: ${process.stdin.isPaused?.() ?? 'N/A'}`)
-      this.log(`  - stdin.readableFlowing: ${process.stdin.readableFlowing}`)
-      
-      // Test if stdin is actually responsive
-      this.log('\n[DEBUG] Testing stdin responsiveness...')
-      this.log('[DEBUG] Press any key within 3 seconds to test stdin (or wait for timeout)...')
-      
-      const testPromise = new Promise<void>((resolve) => {
-        let received = false
-        const timeout = setTimeout(() => {
-          if (!received) {
-            this.log('[DEBUG] stdin test timeout - no input received!')
-          }
-          resolve()
-        }, 3000)
-        
-        const testListener = (data: Buffer) => {
-          received = true
-          clearTimeout(timeout)
-          const bytes = Array.from(data).map(b => `0x${b.toString(16).padStart(2, '0')}`).join(' ')
-          this.log(`[DEBUG] stdin test received: ${bytes} (${JSON.stringify(data.toString())})`)
-          process.stdin.off('data', testListener)
-          resolve()
-        }
-        
-        process.stdin.on('data', testListener)
-      })
-      
-      await testPromise
+      this.log('[DEBUG] Terminal is ready for Inquirer prompt')
     }
     
     const action = await select<string>({
