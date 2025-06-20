@@ -90,3 +90,4 @@ The Chromancer tool follows the oclif framework pattern:
 ## Memories
 
 - Remember what worked and what didn't
+- Design workflows with command invocations that present lists of options and use prompts to improve user experience
