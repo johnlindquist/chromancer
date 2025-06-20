@@ -6,6 +6,18 @@ export interface WorkflowStepResult {
   output?: string;
   error?: string;
   duration: number;
+  checkpoint?: WorkflowCheckpoint;
+}
+
+export interface WorkflowCheckpoint {
+  id: string;
+  name?: string;
+  pageState: {
+    url: string;
+    title: string;
+    timestamp: string;
+  };
+  stepNumber: number;
 }
 
 export interface WorkflowExecutionResult {
@@ -16,6 +28,7 @@ export interface WorkflowExecutionResult {
   steps: WorkflowStepResult[];
   totalDuration: number;
   earlyBailout?: boolean;
+  checkpoints?: WorkflowCheckpoint[];
 }
 
 export interface SavedWorkflow {
@@ -30,6 +43,7 @@ export interface SavedWorkflow {
   executions?: number;
   lastExecuted?: string;
   versions?: WorkflowVersion[];
+  branches?: WorkflowBranch[];
 }
 
 export interface WorkflowVersion {
@@ -38,4 +52,13 @@ export interface WorkflowVersion {
   prompt: string;
   createdAt: string;
   reason?: string; // Why this version was created (e.g., "autofix attempt 1")
+}
+
+export interface WorkflowBranch {
+  id: string;
+  name: string;
+  fromCheckpoint: string; // checkpoint ID
+  prompt: string; // What the user wanted to do from this checkpoint
+  yaml: string; // Additional steps from the checkpoint
+  createdAt: string;
 }

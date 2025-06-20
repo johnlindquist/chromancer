@@ -105,6 +105,19 @@ export default class AI extends BaseCommand {
     await new Promise(resolve => setTimeout(resolve, 10))
   }
 
+  private async safePrompt<T>(promptFn: () => Promise<T>): Promise<T | null> {
+    try {
+      return await promptFn()
+    } catch (error) {
+      // Handle user interruption gracefully
+      if (error instanceof Error && error.message.includes('User force closed')) {
+        this.log('\n\n✋ Operation cancelled by user')
+        process.exit(0)
+      }
+      throw error
+    }
+  }
+
   async run(): Promise<void> {
     const { args, flags } = await this.parse(AI)
 
@@ -379,6 +392,7 @@ AVAILABLE COMMANDS:
 - fill: Fill form field ({selector, value})
 - assert: Assert condition ({selector, text/value/visible})
 - keypress: Press keyboard key (key string like "Enter", "Tab", "Escape")
+- checkpoint: Create a checkpoint for branching ({name: "checkpoint name"} or just "name")
 
 IMPORTANT DATA EXTRACTION RULES:
 - When user asks to "scrape", "grab", "extract", or "get" data, ALWAYS use evaluate
@@ -867,10 +881,13 @@ Consider using broader selectors first to test, then narrow down.`
       this.log(`[DEBUG] Terminal is ready for Inquirer prompt`)
     }
     
-    action = await select<string>({
+    const result = await this.safePrompt(() => select<string>({
       message: 'The workflow needs improvement. What would you like to do?',
       choices
-    })
+    }))
+    
+    if (!result) return // This shouldn't happen as safePrompt exits on cancel
+    action = result
 
     // Handle suggestion selections
     if (action.startsWith('suggestion_')) {
@@ -901,10 +918,11 @@ Consider using broader selectors first to test, then narrow down.`
 
       case 'modify': {
         await this.stabilizeTerminal(flags.debug as boolean)
-        const newInstruction = await input({
+        const newInstruction = await this.safePrompt(() => input({
           message: 'Enter modified instruction:',
           default: originalInstruction
-        })
+        }))
+        if (!newInstruction) return
 
         // Reset attempts for new instruction
         this.attempts = []
@@ -923,10 +941,11 @@ Consider using broader selectors first to test, then narrow down.`
         }
 
         await this.stabilizeTerminal(flags.debug as boolean)
-        const feedbackText = await input({
+        const feedbackText = await this.safePrompt(() => input({
           message: 'What needs to be corrected or improved?',
           validate: (value) => value.trim().length > 0 || 'Please provide your feedback'
-        })
+        }))
+        if (!feedbackText) return
 
         // Create a structured refinement that includes the output
         const refinedInstruction = await this.createRefinedInstruction(
@@ -945,7 +964,7 @@ Consider using broader selectors first to test, then narrow down.`
 
       case 'refine': {
         await this.stabilizeTerminal(flags.debug as boolean)
-        const refinementType = await select<string>({
+        const refinementType = await this.safePrompt(() => select<string>({
           message: 'What would you like to refine?',
           choices: [
             { name: 'Specify exact element text or attributes', value: 'element' },
@@ -953,16 +972,18 @@ Consider using broader selectors first to test, then narrow down.`
             { name: 'Specify data format', value: 'format' },
             { name: 'Add error handling', value: 'error' }
           ]
-        })
+        }))
+        if (!refinementType) return
 
         let refinedSelectorInstruction = originalInstruction
 
         switch (refinementType) {
           case 'element': {
             await this.stabilizeTerminal(flags.debug as boolean)
-            const elementDetails = await input({
+            const elementDetails = await this.safePrompt(() => input({
               message: 'Describe the element more specifically (e.g., "the blue submit button", "link containing \'Login\'"):'
-            })
+            }))
+            if (!elementDetails) return
             refinedSelectorInstruction = await this.createAIRefinedInstruction(
               originalInstruction,
               `Look for ${elementDetails}`,
@@ -973,9 +994,10 @@ Consider using broader selectors first to test, then narrow down.`
 
           case 'wait': {
             await this.stabilizeTerminal(flags.debug as boolean)
-            const waitDetails = await input({
+            const waitDetails = await this.safePrompt(() => input({
               message: 'What should we wait for? (e.g., "wait for loading spinner to disappear", "wait 2 seconds"):'
-            })
+            }))
+            if (!waitDetails) return
             refinedSelectorInstruction = await this.createAIRefinedInstruction(
               originalInstruction,
               waitDetails,
@@ -986,9 +1008,10 @@ Consider using broader selectors first to test, then narrow down.`
 
           case 'format': {
             await this.stabilizeTerminal(flags.debug as boolean)
-            const formatDetails = await input({
+            const formatDetails = await this.safePrompt(() => input({
               message: 'How should the data be formatted? (e.g., "as CSV", "only titles", "include links"):'
-            })
+            }))
+            if (!formatDetails) return
             refinedSelectorInstruction = await this.createAIRefinedInstruction(
               originalInstruction,
               `Format the data ${formatDetails}`,
@@ -1026,10 +1049,11 @@ Consider using broader selectors first to test, then narrow down.`
   private async promptSaveWorkflow(instruction: string, yamlText: string, skipConfirmation = false, debug = false): Promise<void> {
     if (!skipConfirmation) {
       await this.stabilizeTerminal(debug)
-      const shouldSave = await confirm({
+      const shouldSave = await this.safePrompt(() => confirm({
         message: 'Would you like to save this workflow?',
         default: true
-      })
+      }))
+      if (shouldSave === null) return
 
       if (!shouldSave) {
         this.log('✅ Workflow completed without saving.')
@@ -1038,20 +1062,23 @@ Consider using broader selectors first to test, then narrow down.`
     }
 
     await this.stabilizeTerminal(debug)
-    const name = await input({
+    const name = await this.safePrompt(() => input({
       message: 'Workflow name:',
       validate: (value) => value.length > 0 || 'Name is required'
-    })
+    }))
+    if (!name) return
 
     await this.stabilizeTerminal(debug)
-    const description = await input({
+    const description = await this.safePrompt(() => input({
       message: 'Description (optional):'
-    })
+    }))
+    if (description === null) return
 
     await this.stabilizeTerminal(debug)
-    const tags = await input({
+    const tags = await this.safePrompt(() => input({
       message: 'Tags (comma-separated, optional):'
-    })
+    }))
+    if (tags === null) return
 
     const tagArray = tags ? tags.split(',').map((t: string) => t.trim()).filter(Boolean) : undefined
 
@@ -1219,7 +1246,7 @@ IMPORTANT for suggestions:
       this.log('[DEBUG] Terminal is ready for Inquirer prompt')
     }
     
-    const action = await select<string>({
+    const action = await this.safePrompt(() => select<string>({
       message: 'The workflow succeeded! What would you like to do?',
       choices: [
         { name: '💾 Save workflow for future use', value: 'save' },
@@ -1229,7 +1256,8 @@ IMPORTANT for suggestions:
         { name: '🚀 Continue building workflow from here...', value: 'continue' },
         { name: '✅ Done', value: 'done' }
       ]
-    })
+    }))
+    if (!action) return
 
     switch (action) {
       case 'save':
@@ -1243,10 +1271,11 @@ IMPORTANT for suggestions:
 
       case 'modify': {
         await this.stabilizeTerminal(flags.debug as boolean)
-        const newInstruction = await input({
+        const newInstruction = await this.safePrompt(() => input({
           message: 'Enter modified instruction:',
           default: instruction
-        })
+        }))
+        if (!newInstruction) return
         this.attempts = []
         await this.attemptWorkflow(newInstruction, flags)
         break
@@ -1264,10 +1293,11 @@ IMPORTANT for suggestions:
         }
 
         await this.stabilizeTerminal(flags.debug as boolean)
-        const feedbackText = await input({
+        const feedbackText = await this.safePrompt(() => input({
           message: 'What needs to be different about the results?',
           validate: (value) => value.trim().length > 0 || 'Please provide your feedback'
-        })
+        }))
+        if (!feedbackText) return
 
         // Create a structured refinement that includes the output
         const refinedWithFeedback = await this.createRefinedInstruction(
@@ -1293,10 +1323,11 @@ IMPORTANT for suggestions:
         this.log(`📍 Current page: ${currentUrl}`)
 
         await this.stabilizeTerminal(flags.debug as boolean)
-        const continuationInstruction = await input({
+        const continuationInstruction = await this.safePrompt(() => input({
           message: 'What would you like to do next from this page?',
           validate: (value) => value.trim().length > 0 || 'Please describe what to do next'
-        })
+        }))
+        if (!continuationInstruction) return
 
         // Continue with existing workflow as base
         await this.continueWorkflow(instruction, yamlText, continuationInstruction, flags)

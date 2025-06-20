@@ -1,5 +1,5 @@
 import { Page } from 'playwright';
-import type { WorkflowStepResult, WorkflowExecutionResult } from '../types/workflow.js';
+import type { WorkflowStepResult, WorkflowExecutionResult, WorkflowCheckpoint } from '../types/workflow.js';
 import * as yaml from 'yaml';
 import { DataFormatter } from './data-formatter.js';
 import { RunLogManager } from './run-log.js';
@@ -7,6 +7,7 @@ import { DOMDigest } from './dom-digest.js';
 import { normalizeSelector, isValidSelector, formatSelectorForError, suggestSelectorFix } from './selector-normalizer.js';
 import { DOMInspector } from './dom-inspector.js';
 import { input } from '@inquirer/prompts';
+import { randomUUID } from 'crypto';
 
 interface WorkflowStep {
   [command: string]: any;
@@ -26,6 +27,7 @@ export class WorkflowExecutor {
   private page: Page;
   private stepResults: WorkflowStepResult[] = [];
   private originalPrompt?: string;
+  private checkpoints: WorkflowCheckpoint[] = [];
 
   constructor(page: Page, originalPrompt?: string) {
     this.page = page;
@@ -34,6 +36,10 @@ export class WorkflowExecutor {
 
   getStepResults(): WorkflowStepResult[] {
     return this.stepResults;
+  }
+
+  getCheckpoints(): WorkflowCheckpoint[] {
+    return this.checkpoints;
   }
 
   async execute(
@@ -97,7 +103,7 @@ export class WorkflowExecutor {
         }
       }
 
-      this.stepResults.push({
+      const stepResult: WorkflowStepResult = {
         stepNumber,
         command,
         args,
@@ -105,7 +111,17 @@ export class WorkflowExecutor {
         output,
         error,
         duration: Date.now() - stepStartTime
-      });
+      };
+
+      // Check if this step created a checkpoint
+      if (command === 'checkpoint' && success) {
+        const lastCheckpoint = this.checkpoints[this.checkpoints.length - 1];
+        if (lastCheckpoint) {
+          stepResult.checkpoint = lastCheckpoint;
+        }
+      }
+
+      this.stepResults.push(stepResult);
 
       // Notify step complete
       if (options.onStepComplete) {
@@ -122,7 +138,8 @@ export class WorkflowExecutor {
       successfulSteps: successCount,
       failedSteps: failureCount,
       steps: this.stepResults,
-      totalDuration: Date.now() - startTime
+      totalDuration: Date.now() - startTime,
+      checkpoints: this.checkpoints
     };
   }
 
@@ -530,6 +547,26 @@ export class WorkflowExecutor {
             throw new Error('Assert requires either selector or eval/script');
           }
         }
+        break;
+
+      case 'checkpoint':
+        // Create a checkpoint at this step
+        const checkpointName = typeof args === 'string' ? args : args.name;
+        const checkpointId = randomUUID();
+        
+        const checkpoint: WorkflowCheckpoint = {
+          id: checkpointId,
+          name: checkpointName,
+          pageState: {
+            url: this.page.url(),
+            title: await this.page.title(),
+            timestamp: new Date().toISOString()
+          },
+          stepNumber: this.stepResults.length + 1
+        };
+        
+        this.checkpoints.push(checkpoint);
+        output = `Created checkpoint: ${checkpointName || checkpointId}`;
         break;
 
       default:
